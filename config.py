@@ -61,6 +61,10 @@ class _BoundedTTSQueue(queue.Queue):
 tts_queue = _BoundedTTSQueue(maxsize=20)
 TTS_VOICE = "en"
 TTS_SPEED = 150
+# When True, save each generated TTS output to a WAV file for analysis
+# Files are written to `TTS_CAPTURE_DIR` (default: <project_root>/tts_captures)
+TTS_CAPTURE = False
+TTS_CAPTURE_DIR = str(BASE_DIR / "tts_captures")
 
 # =========================
 # MONEY MAPPING
