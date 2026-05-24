@@ -6,29 +6,14 @@ import threading
 from collections import deque
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # ==========================================
 # CONFIGURATION
 # ==========================================
 BASE_DIR = Path(__file__).resolve().parent
 
-def _load_env_file(path):
-    if not path.exists():
-        return
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, value = line.split("=", 1)
-                key = key.strip()
-                value = value.strip().strip('"').strip("'")
-                if key and key not in os.environ:
-                    os.environ[key] = value
-    except Exception:
-        pass
-
-_load_env_file(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / ".env", override=False)
 
 # Performance mode: no printing and force headless for speed
 PERF_MODE = False
@@ -51,6 +36,7 @@ RESOLUTION = (400, 280)
 SHOW_DISPLAY = False if PERF_MODE else bool(
     os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY") or os.name == 'nt'
 )
+HEADLESS_MODE = False
 
 # CV livestream
 STREAM_HOST="0.0.0.0"

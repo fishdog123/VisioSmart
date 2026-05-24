@@ -1,3 +1,4 @@
+import argparse
 import cv2
 import os
 import signal
@@ -5,13 +6,23 @@ import time
 import threading
 import queue
 
+import config
+
+parser = argparse.ArgumentParser(description="Smart glasses CV service")
+parser.add_argument("--headless", action="store_true",
+                    help="Run without display output and window rendering")
+args, _ = parser.parse_known_args()
+if args.headless:
+    config.HEADLESS_MODE = True
+    config.SHOW_DISPLAY = False
+
 from flask import Flask, Response
 from config import (
     current_mode, mode_lock, tts_queue, active_mode_ref,
-    MODE_NAMES, SHOW_DISPLAY, RESOLUTION, OCR_RESOLUTION, TTS_SHUTDOWN,
+    MODE_NAMES, RESOLUTION, OCR_RESOLUTION, TTS_SHUTDOWN,
     THERMAL_ZONE_PATH, THERMAL_WARNING_THRESHOLD, THERMAL_CHECK_INTERVAL,
     STREAM_HOST, STREAM_PORT,
-    llm_one_shot_queue, CHAT_MODE, 
+    llm_one_shot_queue, CHAT_MODE,
 )
 import tts  # noqa: F401 — starts TTS worker thread on import
 from camera import get_frame, release_camera, reconfigure_camera
@@ -194,9 +205,12 @@ def main():
                     tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
                     print(f"[MODE] Switched to: {MODE_NAMES[active_mode]}")
                 elif new_mode in processors:
-                    # Reset outgoing processor state (e.g. OCR recent_texts)
+                            # Reset outgoing processor state (e.g. OCR recent_texts)
                     if active_mode in processors and hasattr(processors[active_mode], 'reset'):
                         processors[active_mode].reset()
+                    # Reset the incoming processor to allow one-shot modes to re-run cleanly
+                    if new_mode in processors and hasattr(processors[new_mode], 'reset'):
+                        processors[new_mode].reset()
                     # Clear pending TTS messages from the previous mode
                     with tts_queue.mutex:
                         dropped = len(tts_queue.queue)
@@ -214,7 +228,7 @@ def main():
                     tts_queue.put("Still loading, please wait.")
 
             # Skip frame capture when idle in headless mode
-            if active_mode is None and not SHOW_DISPLAY:
+            if active_mode is None and not config.SHOW_DISPLAY:
                 time.sleep(0.1)
                 continue
 
@@ -235,7 +249,7 @@ def main():
                     active_mode = None
                     active_mode_ref[0] = None
 
-            if SHOW_DISPLAY:
+            if config.SHOW_DISPLAY:
                 if active_mode:
                     cv2.putText(frame, f"Mode: {MODE_NAMES[active_mode].upper()}", (10,30),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
@@ -262,7 +276,7 @@ def main():
     finally:
         print("[INFO] Shutting down...")
         release_camera()
-        if SHOW_DISPLAY:
+        if config.SHOW_DISPLAY:
             cv2.destroyAllWindows()
         tts_queue.put(TTS_SHUTDOWN)
         time.sleep(1)  # Give TTS time to finish
