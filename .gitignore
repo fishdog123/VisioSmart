@@ -4,3 +4,4 @@ object_detection/**
 currency_detection/**
 vosk-model-small-en-us-0.15/**
 face_detection/**
+.env
