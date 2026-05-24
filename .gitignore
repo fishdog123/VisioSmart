@@ -1,4 +1,4 @@
-__pycache__/**
+**/__pycache__/**
 ocr/**
 object_detection/**
 currency_detection/**

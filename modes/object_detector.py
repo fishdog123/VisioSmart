@@ -4,7 +4,7 @@ import os
 import time
 from collections import deque
 
-from config import OBJECT_MODEL_PATH, BASE_DIR, YOLO_CONF, SHOW_DISPLAY, tts_queue, NO_DETECT_INTERVAL
+from config import OBJECT_MODEL_PATH, BASE_DIR, YOLO_CONF, HEADLESS_MODE, tts_queue, NO_DETECT_INTERVAL
 
 # ==========================================
 # MODE 4: OBJECT DETECTION
@@ -150,7 +150,7 @@ class ObjectDetector:
         self.avg_frame_rate = np.mean(self.frame_rate_buffer)
 
         # Add info to frame
-        if SHOW_DISPLAY:
+        if not HEADLESS_MODE:
             counts = {}
             for name, _ in object_details:
                 counts[name] = counts.get(name, 0) + 1

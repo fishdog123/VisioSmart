@@ -1,0 +1,21 @@
+[Unit]
+Description=CV Service of Smart Glasses System
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/Pr/Gradv4_gemini_chat_scene
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/home/pi/Pr/pr_gemini/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment="GEMINI_API_KEY=AIzaSyD8ypFbIo9Gb3tpYYLtoiVDua329loaQqw"
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+ExecStartPre=/bin/sleep 20
+ExecStart=/home/pi/Pr/pr_gemini/bin/python /home/pi/Pr/Gradv4_gemini_chat_scene/main.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

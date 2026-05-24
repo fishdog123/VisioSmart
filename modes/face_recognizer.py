@@ -3,7 +3,7 @@ import numpy as np
 import os
 import time
 from collections import defaultdict
-from config import FACE_DB_PATH, FACE_DETECT_INTERVAL, FACE_THRESHOLD, SHOW_DISPLAY, tts_queue, NO_PERSON_GRACE, PERSON_TTL, ANNOUNCE_EVERY, GREET_COOLDOWN
+from config import FACE_DB_PATH, FACE_DETECT_INTERVAL, FACE_THRESHOLD, HEADLESS_MODE, tts_queue, NO_PERSON_GRACE, PERSON_TTL, ANNOUNCE_EVERY, GREET_COOLDOWN
 
 
 class FaceRecognizer:
@@ -121,7 +121,7 @@ class FaceRecognizer:
                 x1, y1, x2, y2 = face.bbox.astype(int)
                 position = self._get_position(x1, x2, frame_width)
 
-                if SHOW_DISPLAY:
+                if not HEADLESS_MODE:
                     self.last_faces.append((x1, y1, x2, y2, name))
 
                 # update global "face seen" heartbeat
@@ -244,7 +244,7 @@ class FaceRecognizer:
         # -------------------------------
         # Display
         # -------------------------------
-        if SHOW_DISPLAY:
+        if not HEADLESS_MODE:
             for x1, y1, x2, y2, name in self.last_faces:
                 color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)

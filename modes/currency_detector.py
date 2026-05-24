@@ -3,7 +3,7 @@ import numpy as np
 import time
 from collections import deque
 
-from config import CURRENCY_MODEL_PATH, MONEY, YOLO_CONF, SHOW_DISPLAY, tts_queue, NO_DETECT_INTERVAL
+from config import CURRENCY_MODEL_PATH, MONEY, YOLO_CONF, HEADLESS_MODE, tts_queue, NO_DETECT_INTERVAL
 
 # ==========================================
 # MODE 1: CURRENCY DETECTOR
@@ -72,7 +72,7 @@ class CurrencyDetector:
         self.frame_rate_buffer.append(fps)
         self.avg_frame_rate = np.mean(self.frame_rate_buffer)
 
-        if SHOW_DISPLAY:
+        if not HEADLESS_MODE:
             cv2.putText(frame, f'Total: {total_money} Pounds', (10,20),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 2)
             cv2.putText(frame, f'FPS: {self.avg_frame_rate:.2f}', (10,40),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 2)
 

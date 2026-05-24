@@ -2,15 +2,9 @@ import cv2
 import threading
 import time
 from PIL import Image
-
-from config import GEMINI_API_KEY, SHOW_DISPLAY, tts_queue, NO_DETECT_INTERVAL
-
-try:
-    from google import genai
-    from google.genai import types
-except ImportError:
-    genai = None
-    types = None
+from config import GEMINI_API_KEY, HEADLESS_MODE, tts_queue, NO_DETECT_INTERVAL
+from google import genai
+from google.genai import types
 
 SYSTEM_PROMPT = (
     "You are a fast embedded assistant for smart glasses for blind users. "
@@ -50,14 +44,14 @@ class GeminiSceneDescriber:
                 with self._lock:
                     if not self._pending:
                         self._pending = True
-                        worker_frame = rgb.copy()
+                        worker_frame = frame.copy()
                         threading.Thread(
                             target=self._describe_frame_async,
                             args=(worker_frame,),
                             daemon=True,
                         ).start()
 
-        if SHOW_DISPLAY:
+        if not HEADLESS_MODE:
             cv2.putText(frame, "Scene Description Mode", (10, 60),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         return frame
@@ -79,7 +73,7 @@ class GeminiSceneDescriber:
 
     def _describe_frame(self, frame):
         try:
-            img = Image.fromarray(frame)
+            img = Image.fromarray(frame, mode="RGB")
             config = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
             response = self.client.models.generate_content(
                 model='gemini-2.5-flash',

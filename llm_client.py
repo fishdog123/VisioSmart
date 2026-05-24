@@ -11,7 +11,7 @@ from config import (
     LLM_TOP_P,
     LLM_TOP_K,
     LLM_MAX_CONTEXT_CHARS,
-    QUIET_MODE,
+    HEADLESS_MODE,
     MODE_NAMES,
 )
 
@@ -90,7 +90,7 @@ def _post(system_content, context, user_text):
     if not parts:
         return ""
     content = "".join(part.get("text", "") for part in parts).strip()
-    if not QUIET_MODE:
+    if not HEADLESS_MODE:
         print(f"[LLM] Raw: {content}")
     return content
 

@@ -13,8 +13,7 @@ parser.add_argument("--headless", action="store_true",
                     help="Run without display output and window rendering")
 args, _ = parser.parse_known_args()
 if args.headless:
-    config.HEADLESS_MODE = True
-    config.SHOW_DISPLAY = False
+    config.set_headless_mode(True)
 
 from flask import Flask, Response
 from config import (
@@ -228,7 +227,7 @@ def main():
                     tts_queue.put("Still loading, please wait.")
 
             # Skip frame capture when idle in headless mode
-            if active_mode is None and not config.SHOW_DISPLAY:
+            if active_mode is None and config.HEADLESS_MODE:
                 time.sleep(0.1)
                 continue
 
@@ -249,7 +248,7 @@ def main():
                     active_mode = None
                     active_mode_ref[0] = None
 
-            if config.SHOW_DISPLAY:
+            if not config.HEADLESS_MODE:
                 if active_mode:
                     cv2.putText(frame, f"Mode: {MODE_NAMES[active_mode].upper()}", (10,30),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
@@ -277,7 +276,7 @@ def main():
     finally:
         print("[INFO] Shutting down...")
         release_camera()
-        if config.SHOW_DISPLAY:
+        if not config.HEADLESS_MODE:
             cv2.destroyAllWindows()
         tts_queue.put(TTS_SHUTDOWN)
         time.sleep(1)  # Give TTS time to finish

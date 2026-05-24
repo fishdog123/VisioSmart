@@ -3,7 +3,7 @@ import numpy as np
 import time
 from collections import deque
 
-from config import OCR_BASE_DIR, OCR_INTERVAL, OCR_MIN_CONFIDENCE, SHOW_DISPLAY, tts_queue, NO_DETECT_INTERVAL
+from config import OCR_BASE_DIR, OCR_INTERVAL, OCR_MIN_CONFIDENCE, HEADLESS_MODE, tts_queue, NO_DETECT_INTERVAL
 
 # ==========================================
 # MODE 3: OCR
@@ -76,7 +76,7 @@ class OCRProcessor:
             # Collect new texts to speak as one combined message
             new_texts = []
             for pts, text in raw_results:
-                if SHOW_DISPLAY:
+                if not HEADLESS_MODE:
                     self.last_boxes.append((pts, text))
                 key = text.lower()
                 if key not in self.recent_texts:
@@ -95,7 +95,7 @@ class OCRProcessor:
                 tts_queue.put("No text detected. Still scanning.")
                 self.last_no_detect_time = now
 
-        if SHOW_DISPLAY:
+        if not HEADLESS_MODE:
             for pts, text in self.last_boxes:
                 cv2.polylines(frame, [np.array(pts)], True, (0,0,255), 2)
                 cv2.putText(frame, text, (pts[0][0], pts[0][1]-5),
