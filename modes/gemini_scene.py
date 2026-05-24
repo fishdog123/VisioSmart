@@ -1,4 +1,5 @@
 import cv2
+import threading
 import time
 from PIL import Image
 
@@ -30,30 +31,47 @@ class GeminiSceneDescriber:
         self.cooldown = 10
         self.last_no_detect_time = 0
         self.completed = False
+        self._pending = False
+        self._lock = threading.Lock()
         print("[INFO] Gemini scene describer ready.")
 
     def reset(self):
         self.completed = False
         self.last_spoken_time = 0
         self.last_no_detect_time = 0
+        with self._lock:
+            self._pending = False
 
     def process(self, frame):
         if not self.completed:
             now = time.time()
             if now - self.last_spoken_time >= self.cooldown:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                description = self._describe_frame(frame)
-                if description:
-                    print(f"[SCENE] {description}")
-                    tts_queue.put(description)
-                    self.last_spoken_time = now
-                    self.last_no_detect_time = now
-                    self.completed = True
+                with self._lock:
+                    if not self._pending:
+                        self._pending = True
+                        worker_frame = frame.copy()
+                        threading.Thread(
+                            target=self._describe_frame_async,
+                            args=(worker_frame,),
+                            daemon=True,
+                        ).start()
 
         if SHOW_DISPLAY:
             cv2.putText(frame, "Scene Description Mode", (10, 60),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         return frame
+
+    def _describe_frame_async(self, frame):
+        description = self._describe_frame(frame)
+        with self._lock:
+            self._pending = False
+
+        if description:
+            print(f"[SCENE] {description}")
+            tts_queue.put(description)
+            self.last_spoken_time = time.time()
+            self.last_no_detect_time = self.last_spoken_time
+            self.completed = True
 
     def summarize(self, frame):
         return self._describe_frame(frame)
