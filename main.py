@@ -254,7 +254,8 @@ def main():
                     cv2.putText(frame, f"Mode: {MODE_NAMES[active_mode].upper()}", (10,30),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
 
-                cv2.imshow("Smart Glasses", frame)
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                cv2.imshow("Smart Glasses", rgb)
 
                 # Check if window is still open
                 try:

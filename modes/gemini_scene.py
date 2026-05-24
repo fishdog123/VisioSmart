@@ -43,13 +43,14 @@ class GeminiSceneDescriber:
             self._pending = False
 
     def process(self, frame):
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         if not self.completed:
             now = time.time()
             if now - self.last_spoken_time >= self.cooldown:
                 with self._lock:
                     if not self._pending:
                         self._pending = True
-                        worker_frame = frame.copy()
+                        worker_frame = rgb.copy()
                         threading.Thread(
                             target=self._describe_frame_async,
                             args=(worker_frame,),
@@ -78,8 +79,7 @@ class GeminiSceneDescriber:
 
     def _describe_frame(self, frame):
         try:
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(rgb)
+            img = Image.fromarray(frame)
             config = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
             response = self.client.models.generate_content(
                 model='gemini-2.5-flash',
