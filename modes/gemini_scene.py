@@ -37,7 +37,6 @@ class GeminiSceneDescriber:
             self._pending = False
 
     def process(self, frame):
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         if not self.completed:
             now = time.time()
             if now - self.last_spoken_time >= self.cooldown:

@@ -1,7 +1,5 @@
-import atexit
 import os
 import queue
-import sys
 import threading
 from collections import deque
 from pathlib import Path
