@@ -13,7 +13,7 @@ from config import (
 # ==========================================
 # TTS FUNCTIONS
 # ==========================================
-TTS_TIMEOUT = 15  # seconds — prevents permanent hang if pw-play freezes
+TTS_TIMEOUT = 30 # seconds — prevents permanent hang if pw-play freezes
 
 def speak(text):
     try:
