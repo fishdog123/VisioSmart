@@ -14,14 +14,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent
 
 load_dotenv(BASE_DIR / ".env", override=False)
-
-# Performance mode: no printing and force headless for speed
-PERF_MODE = False
-QUIET_MODE = PERF_MODE
-
-if QUIET_MODE:
-    sys.stdout = open(os.devnull, 'w')
-    sys.stderr = open(os.devnull, 'w')
+HEADLESS_MODE = False
 
 # Paths
 CURRENCY_MODEL_PATH = str(BASE_DIR / "currency_detection" / "last_15e_ncnn_model")
@@ -32,11 +25,14 @@ VOSK_MODEL_PATH = str(BASE_DIR / "vosk-model-small-en-us-0.15")
 
 # Camera
 RESOLUTION = (400, 280)
-# Auto-detect display: True on Windows or Linux with X11/Wayland, False on headless RPi
-SHOW_DISPLAY = False if PERF_MODE else bool(
-    os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY") or os.name == 'nt'
-)
-HEADLESS_MODE = False
+
+
+def set_headless_mode(headless: bool):
+    """Set headless mode explicitly at runtime. This is intended to be
+    called from `main.py` based on CLI args. When headless is True, display is
+    disabled. """
+    global HEADLESS_MODE
+    HEADLESS_MODE = bool(headless)
 
 # CV livestream
 STREAM_HOST="0.0.0.0"
