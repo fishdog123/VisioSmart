@@ -1,7 +1,7 @@
 import os
 import cv2
 import numpy as np
-from tensorflow.keras.preprocessing.image import img_to_array
+from keras.preprocessing.image import img_to_array
 
 
 class EmotionRecognizer:
@@ -62,7 +62,7 @@ class EmotionRecognizer:
                 roi = np.expand_dims(roi, -1)
             roi = np.expand_dims(roi, 0)
 
-            preds = self.model.predict(roi)[0]
+            preds = self.model.predict(roi, verbose=0)[0]
             idx = int(np.argmax(preds))
             label = self.labels[idx] if idx < len(self.labels) else "Unknown"
             score = float(preds[idx])
