@@ -174,7 +174,7 @@ class FaceRecognizer:
                         emotion_label, emotion_score = (None, 0.0)
 
                 if not HEADLESS_MODE:
-                    self.last_faces.append((x1, y1, x2, y2, name, emotion_label))
+                    self.last_faces.append((x1, y1, x2, y2, name, emotion_label, emotion_score))
 
                 # update global "face seen" heartbeat
                 self.last_face_seen_time = now
@@ -334,12 +334,12 @@ class FaceRecognizer:
         # Display
         # -------------------------------
         if not HEADLESS_MODE:
-            for x1, y1, x2, y2, name, emotion in self.last_faces:
+            for x1, y1, x2, y2, name, emotion, emotion_score in self.last_faces:
                 color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 label_text = name.title()
                 if emotion and emotion != "Unknown":
-                    label_text = f"{label_text} ({emotion})"
+                    label_text = f"{label_text} ({emotion} {emotion_score:.2f})"
                 cv2.putText(frame, label_text, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
