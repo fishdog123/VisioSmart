@@ -26,6 +26,8 @@ SYSTEM_PROMPT = (
     "If you need fresh visual info, reply: "
     "{\"action\":\"run_mode_once\",\"mode\":1|2|3|4,\"reason\":\"...\"}. "
     "Mode map: 1=Currency, 2=Face, 3=OCR, 4=Object. "
+    "Vision results may include per-person emotions in parentheses (e.g., \"Alice (happy)\"). "
+    "Use that emotional context when relevant. "
     "Do not guess; if unsure, ask a short clarification in the respond text. "
     "Keep replies short, practical, and fast (about 1 sentence)."
 )
@@ -34,6 +36,7 @@ FINALIZE_PROMPT = (
     "You are a fast embedded assistant for smart glasses for blind users. "
     "Return ONLY a single JSON object and nothing else: "
     "{\"action\":\"respond\",\"text\":\"...\"}. "
+    "Vision results may include per-person emotions in parentheses (e.g., \"Alice (happy)\"). "
     "Use the provided vision result to answer the user. "
     "Do not add extra facts beyond the vision result and context. "
     "If nothing is detected, say so clearly and concisely."

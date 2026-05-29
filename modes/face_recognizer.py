@@ -3,7 +3,23 @@ import numpy as np
 import os
 import time
 from collections import defaultdict
-from config import FACE_DB_PATH, FACE_DETECT_INTERVAL, FACE_THRESHOLD, HEADLESS_MODE, tts_queue, NO_PERSON_GRACE, PERSON_TTL, ANNOUNCE_EVERY, GREET_COOLDOWN
+from config import (
+    FACE_DB_PATH,
+    FACE_DETECT_INTERVAL,
+    FACE_THRESHOLD,
+    HEADLESS_MODE,
+    tts_queue,
+    NO_PERSON_GRACE,
+    PERSON_TTL,
+    ANNOUNCE_EVERY,
+    GREET_COOLDOWN,
+    EMOTION_ENABLED,
+    EMOTION_MODEL_PATH,
+    EMOTION_INPUT_SIZE,
+    EMOTION_CONFIDENCE_THRESHOLD,
+    EMOTION_COOLDOWN,
+    EMOTION_DETECT_INTERVAL,
+)
 
 
 class FaceRecognizer:
@@ -54,6 +70,22 @@ class FaceRecognizer:
 
         self.no_person_announced = False
 
+        # Emotion state
+        self.person_emotions = {}    # name -> {'label', 'score', 'ts'}
+        self.unknown_emotions = []   # list of (position, label, score)
+        self.last_emotion_announce = {}  # name -> ts
+
+        # Load emotion recognizer (modular helper)
+        if EMOTION_ENABLED:
+            from .emotion_recognizer import EmotionRecognizer
+            try:
+                self.emotion = EmotionRecognizer(model_path=EMOTION_MODEL_PATH, input_size=EMOTION_INPUT_SIZE)
+            except Exception as e:
+                print(f"[WARN] Failed to initialize EmotionRecognizer: {e}")
+                self.emotion = None
+        else:
+            self.emotion = None
+
         print("[INFO] Face recognition ready.")
 
     def reset(self):
@@ -71,6 +103,16 @@ class FaceRecognizer:
         self.last_announced_state = (frozenset(), 0)
         self.last_announce_time = time.time()
         self.no_person_announced = False
+        # Clear emotion-related UX state
+        try:
+            self.person_emotions.clear()
+        except Exception:
+            self.person_emotions = {}
+        self.unknown_emotions = []
+        try:
+            self.last_emotion_announce.clear()
+        except Exception:
+            self.last_emotion_announce = {}
 
     def _get_position(self, x1, x2, frame_width):
         """Return spatial zone string based on horizontal position."""
@@ -113,6 +155,7 @@ class FaceRecognizer:
             seen_names_this_frame = set()
             unknown_count = 0
             frame_unknown_positions = []
+            frame_unknown_emotions = []
 
             for face in faces:
                 name = self.recognize(face.normed_embedding) \
@@ -121,8 +164,17 @@ class FaceRecognizer:
                 x1, y1, x2, y2 = face.bbox.astype(int)
                 position = self._get_position(x1, x2, frame_width)
 
+                # predict emotion for this face (if available)
+                emotion_label = None
+                emotion_score = 0.0
+                if self.emotion and getattr(self.emotion, 'enabled', True):
+                    try:
+                        emotion_label, emotion_score = self.emotion.predict(frame, (x1, y1, x2, y2))
+                    except Exception as e:
+                        emotion_label, emotion_score = (None, 0.0)
+
                 if not HEADLESS_MODE:
-                    self.last_faces.append((x1, y1, x2, y2, name))
+                    self.last_faces.append((x1, y1, x2, y2, name, emotion_label))
 
                 # update global "face seen" heartbeat
                 self.last_face_seen_time = now
@@ -133,15 +185,29 @@ class FaceRecognizer:
                     self.person_positions[name] = position
                     seen_names_this_frame.add(name)
 
+                    # store last-seen emotion for this person
+                    self.person_emotions[name] = {'label': emotion_label, 'score': emotion_score, 'ts': now}
+
                     # Instant arrival greeting
                     if was_new:
                         last_greet = self.greeted_times.get(name, 0)
                         if now - last_greet > GREET_COOLDOWN:
-                            tts_queue.put(f"{name.title()} is here, {position}")
+                            greeting = f"{name.title()} is here, {position}"
+                            last_emotion = self.last_emotion_announce.get(name, 0)
+                            if (
+                                emotion_label
+                                and emotion_score >= EMOTION_CONFIDENCE_THRESHOLD
+                                and now - last_emotion > EMOTION_COOLDOWN
+                            ):
+                                greeting = f"{greeting}, looking {emotion_label.lower()}"
+                                self.last_emotion_announce[name] = now
+                            tts_queue.put(greeting)
                             self.greeted_times[name] = now
                 else:
                     unknown_count += 1
                     frame_unknown_positions.append(position)
+                    if emotion_label:
+                        frame_unknown_emotions.append((position, emotion_label, emotion_score))
 
             # Update unknown face tracking (smoothed)
             self._recent_unknown_counts.append(unknown_count)
@@ -152,11 +218,13 @@ class FaceRecognizer:
             if stable_unknown > 0:
                 self.unknown_count = stable_unknown
                 self.unknown_positions = frame_unknown_positions
+                self.unknown_emotions = frame_unknown_emotions
                 self.last_unknown_seen_time = now
             elif unknown_count == 0:
                 # Only clear immediately when this frame sees zero unknowns
                 self.unknown_count = 0
                 self.unknown_positions = []
+                self.unknown_emotions = []
 
             # -------------------------------
             # Prune people who left
@@ -194,21 +262,42 @@ class FaceRecognizer:
                     named_parts = []
                     for n in sorted(current_set):
                         pos = self.person_positions.get(n, "")
-                        named_parts.append(f"{n.title()} {pos}" if pos else n.title())
+                        em = self.person_emotions.get(n, {})
+                        label = em.get('label') if isinstance(em, dict) else None
+                        score = em.get('score', 0.0) if isinstance(em, dict) else 0.0
+                        if label and score >= EMOTION_CONFIDENCE_THRESHOLD:
+                            if pos:
+                                named_parts.append(f"{n.title()} ({label.lower()}) {pos}")
+                            else:
+                                named_parts.append(f"{n.title()} ({label.lower()})")
+                        else:
+                            named_parts.append(f"{n.title()} {pos}" if pos else n.title())
                     parts.append(", ".join(named_parts))
 
                 # Unknown people with positions
                 if self.unknown_count > 0:
                     if self.unknown_positions:
-                        # Group unknowns by position
+                        # Group unknowns by position and include common emotion if available
                         from collections import Counter
                         pos_counts = Counter(self.unknown_positions)
                         unknown_parts = []
                         for pos, cnt in sorted(pos_counts.items()):
+                            # find most common emotion for this position
+                            labels = [e[1] for e in self.unknown_emotions if e[0] == pos]
+                            common_label = None
+                            if labels:
+                                from collections import Counter as C2
+                                common_label = C2(labels).most_common(1)[0][0]
                             if cnt == 1:
-                                unknown_parts.append(f"1 unknown person {pos}")
+                                if common_label:
+                                    unknown_parts.append(f"1 unknown person ({common_label.lower()}) {pos}")
+                                else:
+                                    unknown_parts.append(f"1 unknown person {pos}")
                             else:
-                                unknown_parts.append(f"{cnt} unknown people {pos}")
+                                if common_label:
+                                    unknown_parts.append(f"{cnt} unknown people ({common_label.lower()}) {pos}")
+                                else:
+                                    unknown_parts.append(f"{cnt} unknown people {pos}")
                         parts.append(", ".join(unknown_parts))
                     else:
                         if self.unknown_count == 1:
@@ -245,10 +334,13 @@ class FaceRecognizer:
         # Display
         # -------------------------------
         if not HEADLESS_MODE:
-            for x1, y1, x2, y2, name in self.last_faces:
+            for x1, y1, x2, y2, name, emotion in self.last_faces:
                 color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                cv2.putText(frame, name.title(), (x1, y1 - 10),
+                label_text = name.title()
+                if emotion and emotion != "Unknown":
+                    label_text = f"{label_text} ({emotion})"
+                cv2.putText(frame, label_text, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
         return frame
@@ -260,8 +352,9 @@ class FaceRecognizer:
             return "No person detected."
 
         frame_width = frame.shape[1]
-        named = []
+        named = []  # list of (name, position, emotion_label_or_None)
         unknown_positions = []
+        unknown_emotions = []  # list of (position, label)
 
         for face in faces:
             name = self.recognize(face.normed_embedding) \
@@ -269,23 +362,49 @@ class FaceRecognizer:
             x1, y1, x2, y2 = face.bbox.astype(int)
             position = self._get_position(x1, x2, frame_width)
 
+            # get emotion for this face if available
+            emotion_label = None
+            emotion_score = 0.0
+            if self.emotion and getattr(self.emotion, 'enabled', True):
+                try:
+                    emotion_label, emotion_score = self.emotion.predict(frame, (x1, y1, x2, y2))
+                except Exception:
+                    emotion_label, emotion_score = (None, 0.0)
+
             if name != "Unknown":
-                named.append((name, position))
+                if emotion_label and emotion_score >= EMOTION_CONFIDENCE_THRESHOLD:
+                    named.append((name, position, emotion_label))
+                else:
+                    named.append((name, position, None))
             else:
                 unknown_positions.append(position)
+                if emotion_label and emotion_score >= EMOTION_CONFIDENCE_THRESHOLD:
+                    unknown_emotions.append((position, emotion_label))
 
         parts = []
         if named:
             named_parts = []
-            for name, position in named:
-                named_parts.append(f"{name.title()} {position}")
+            for name, position, label in named:
+                if label:
+                    named_parts.append(f"{name.title()} ({label.lower()}) {position}")
+                else:
+                    named_parts.append(f"{name.title()} {position}")
             parts.append(", ".join(named_parts))
 
         if unknown_positions:
             if len(unknown_positions) == 1:
-                parts.append(f"1 unknown person {unknown_positions[0]}")
+                if unknown_emotions:
+                    parts.append(f"1 unknown person ({unknown_emotions[0][1].lower()}) {unknown_positions[0]}")
+                else:
+                    parts.append(f"1 unknown person {unknown_positions[0]}")
             else:
-                parts.append(f"{len(unknown_positions)} unknown people")
+                if unknown_emotions:
+                    labels = [e[1] for e in unknown_emotions]
+                    from collections import Counter
+                    common_label = Counter(labels).most_common(1)[0][0]
+                    parts.append(f"{len(unknown_positions)} unknown people ({common_label.lower()})")
+                else:
+                    parts.append(f"{len(unknown_positions)} unknown people")
 
         if parts:
             return "I see " + " and ".join(parts)

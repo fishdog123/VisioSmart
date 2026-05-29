@@ -42,6 +42,13 @@ FACE_DETECT_INTERVAL = 3
 OCR_INTERVAL = 0.8
 OCR_MIN_CONFIDENCE = 0.80
 FACE_THRESHOLD = 0.35
+# Emotion detection config
+EMOTION_ENABLED = True
+EMOTION_MODEL_PATH = str(BASE_DIR / "face_detection" / "emotion.h5")
+EMOTION_INPUT_SIZE = (48, 48)
+EMOTION_CONFIDENCE_THRESHOLD = 0.40
+EMOTION_COOLDOWN = 10.0
+EMOTION_DETECT_INTERVAL = FACE_DETECT_INTERVAL  # run emotion inference at same interval by default
 
 # TTS
 class _BoundedTTSQueue(queue.Queue):
