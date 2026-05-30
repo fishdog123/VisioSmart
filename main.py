@@ -26,7 +26,7 @@ from config import (
 import tts  # noqa: F401 — starts TTS worker thread on import
 from camera import get_frame, release_camera, reconfigure_camera
 from voice_control import start_voice_listener
-from modes import CurrencyDetector, FaceRecognizer, GeminiSceneDescriber, OCRProcessor, ObjectDetector
+from modes import CurrencyDetector, FaceRecognizer, GeminiSceneDescriber, OCRProcessor, ObjectDetector, ColorRecognition
 
 
 
@@ -133,6 +133,7 @@ def preload_all():
             (3, "OCR/Text Reading", OCRProcessor),
             (4, "Object Detection", ObjectDetector),
             (6, "Scene Description", GeminiSceneDescriber),
+            (7, "Color Recognition", ColorRecognition),
         ]
 
         for mode_num, name, cls in loaders:
