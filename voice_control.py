@@ -10,7 +10,7 @@ import vosk
 from config import (
     current_mode, mode_lock, tts_queue,
     VOICE_COMMANDS, SPECIAL_COMMANDS, MODE_NAMES, VOSK_MODEL_PATH,
-    active_mode_ref, last_spoken_text, CHAT_MODE,
+    active_mode_ref, last_spoken_text, LOCAL_LLM_CHAT_MODE, GEMINI_CHAT_MODE,
     append_llm_context, get_llm_context, llm_one_shot_queue,
 )
 import llm_client
@@ -51,6 +51,8 @@ def _handle_voice_text(text):
         if word in SPECIAL_COMMANDS:
             _handle_special_command(word)
             return True
+        if (active_mode_ref[0] == GEMINI_CHAT_MODE or active_mode_ref[0] == LOCAL_LLM_CHAT_MODE) and word in ("chat", "assistant", "five"):
+            continue
         if word in VOICE_COMMANDS:
             # Don't trigger a mode change if we are trying to talk to the chat assistant
             if active_mode_ref[0] == CHAT_MODE and word in ("chat", "assistant", "five"):
@@ -64,8 +66,8 @@ def _handle_voice_text(text):
             print(f"[VOICE] Recognized '{word}' -> mode {mode_num}")
             return True
 
-    # If no structural commands matched, pass the whole text to the LLM (if in Chat Mode)
-    if active_mode_ref[0] == CHAT_MODE:
+    # LLM only active in Chat mode
+    if (active_mode_ref[0] == GEMINI_CHAT_MODE or active_mode_ref[0] == LOCAL_LLM_CHAT_MODE):
         return _handle_chat_text(text)
 
     return False

@@ -97,7 +97,6 @@ mode_lock = threading.Lock()
 #     "stop": 0, "exit": 0, "quit": 0,
 # }
 
-CHAT_MODE = 5
 # Lock used to serialize audio device access between TTS and microphone
 audio_lock = threading.RLock()
 
@@ -111,16 +110,32 @@ VOICE_COMMANDS = {
     "six": 6, "6": 6, "scene": 6, "describe": 6,
     "seven": 7, "7": 7, "color": 7, "colour": 7, "colors": 7,
     "eight": 8, "8": 8, "light": 8, "lights": 8,
-}
+GEMINI_CHAT_MODE = 5
+LOCAL_LLM_CHAT_MODE = 6
+
+# VOICE_COMMANDS = {
+#     "one": 1, "won": 1, "currency": 1,
+#     "two": 2, "too": 2, "to": 2, "face": 2,
+#     "three": 3, "free": 3, "tree": 3, "ocr": 3, "text": 3,
+#     "four": 4, "for": 4, "object": 4,
+#     "five": 5, "chat": 5, "assistant": 5,
+#     "six": 6, "scene": 6, "describe": 6,
+#     "seven":7, "color": 7, "colour": 7, "colors": 7,
+#     "eight": 8, "light": 8, "lights": 8,
+#     "stop": 0, "exit": 0, "quit": 0,
+# }
+
 MODE_NAMES = {
     1: "Currency Detection",
     2: "Face Recognition",
     3: "OCR/Text Reading",
     4: "Object Detection",
-    5: "Chat Assistant",
-    6: "Scene Description",
-    7: "Color Recognition",
-    8: "Light Recognition",
+    5: "Gemini Chat Assistant",
+    6: "Local LLM Chat Assistant",
+    7: "Gemini Scene Description",
+    8: "Local LLM Scene Description",
+    9: "Color Recognition",
+    10: "Light Recognition",
 }
 
 # Special (non-mode) voice commands
@@ -164,13 +179,19 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_MODEL = "gemini-3.1-flash-lite"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-
+# ==========================================
+# LLM (Chat Mode)
+# ==========================================
+LLM_URL = "http://localhost:8080/v1/chat/completions"
+LLM_MODEL = "qwen"
 LLM_TIMEOUT_SEC = 30
 LLM_MAX_TOKENS = 140
 LLM_TEMPERATURE = 0.6
 LLM_TOP_P = 0.8
 LLM_TOP_K = 20
 LLM_MAX_CONTEXT_CHARS = 1800
+
+
 
 LLM_CONTEXT_MAX = 14  # short rolling memory for speed
 _llm_context_lock = threading.Lock()

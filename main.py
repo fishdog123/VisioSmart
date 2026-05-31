@@ -21,12 +21,12 @@ from config import (
     MODE_NAMES, RESOLUTION, OCR_RESOLUTION, TTS_SHUTDOWN,
     THERMAL_ZONE_PATH, THERMAL_WARNING_THRESHOLD, THERMAL_CHECK_INTERVAL,
     STREAM_HOST, STREAM_PORT,
-    llm_one_shot_queue, CHAT_MODE,
+    llm_one_shot_queue, LOCAL_LLM_CHAT_MODE,GEMINI_CHAT_MODE
 )
 import tts  # noqa: F401 — starts TTS worker thread on import
 from camera import get_frame, release_camera, reconfigure_camera
 from voice_control import start_voice_listener
-from modes import CurrencyDetector, FaceRecognizer, GeminiSceneDescriber, OCRProcessor, ObjectDetector, ColorRecognition, LightRecognition
+from modes import CurrencyDetector, FaceRecognizer, GeminiSceneDescriber, LocalSceneDescriber, OCRProcessor, ObjectDetector, ColorRecognition, LightRecognition
 
 
 
@@ -132,9 +132,10 @@ def preload_all():
             (2, "Face Recognition", FaceRecognizer),
             (3, "OCR/Text Reading", OCRProcessor),
             (4, "Object Detection", ObjectDetector),
-            (6, "Scene Description", GeminiSceneDescriber),
-            (7, "Color Recognition", ColorRecognition),
-            (8, "Light Recognition", LightRecognition),
+            (7, "Gemini Scene Description", GeminiSceneDescriber),
+            (8, "Local LLM Scene Description", LocalSceneDescriber),
+            (9, "Color Recognition", ColorRecognition),
+            (10, "Light Recognition", LightRecognition),
         ]
 
         for mode_num, name, cls in loaders:
@@ -200,7 +201,7 @@ def main():
             if new_mode is not None and new_mode != active_mode:
                 if new_mode in failed_modes:
                     tts_queue.put(f"{MODE_NAMES.get(new_mode, 'Mode')} failed to load and is unavailable.")
-                elif new_mode == CHAT_MODE:
+                elif new_mode == GEMINI_CHAT_MODE or new_mode == LOCAL_LLM_CHAT_MODE:
                     active_mode = new_mode
                     active_mode_ref[0] = active_mode
                     tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
