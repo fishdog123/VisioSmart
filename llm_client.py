@@ -24,8 +24,8 @@ SYSTEM_PROMPT = (
     "If you can answer using available context, reply: "
     "{\"action\":\"respond\",\"text\":\"...\"}. "
     "If you need fresh visual info, reply: "
-    "{\"action\":\"run_mode_once\",\"mode\":1|2|3|4,\"reason\":\"...\"}. "
-    "Mode map: 1=Currency, 2=Face, 3=OCR, 4=Object. "
+    "{\"action\":\"run_mode_once\",\"mode\":1|2|3|4|6|7,\"reason\":\"...\"}. "
+    "Mode map: 1=Currency, 2=Face, 3=OCR, 4=Object, 6=Scene, 7=Color. "
     "Vision results may include per-person emotions in parentheses (e.g., \"Alice (happy)\"). "
     "Use that emotional context when relevant. "
     "Do not guess; if unsure, ask a short clarification in the respond text. "
@@ -125,8 +125,12 @@ def _parse_action(content):
     action = data.get("action")
     if action == "run_mode_once":
         mode = data.get("mode")
-        if mode in (1, 2, 3, 4):
-            return {"action": "run_mode_once", "mode": mode, "reason": data.get("reason", "")}
+        # Allow any registered mode number from MODE_NAMES
+        try:
+            if isinstance(mode, int) and mode in MODE_NAMES:
+                return {"action": "run_mode_once", "mode": mode, "reason": data.get("reason", "")}
+        except Exception:
+            pass
     if action == "respond":
         text = data.get("text", "").strip()
         if text:

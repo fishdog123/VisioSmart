@@ -43,8 +43,8 @@ OCR_INTERVAL = 0.8
 OCR_MIN_CONFIDENCE = 0.80
 FACE_THRESHOLD = 0.35
 # Emotion detection config
-EMOTION_ENABLED = True
 os.environ["KERAS_BACKEND"] = "torch"
+EMOTION_ENABLED = True
 EMOTION_MODEL_PATH = str(BASE_DIR / "face_detection" / "emotion.h5")
 EMOTION_INPUT_SIZE = (48, 48)
 EMOTION_CONFIDENCE_THRESHOLD = 0.20
@@ -106,6 +106,7 @@ VOICE_COMMANDS = {
     "four": 4, "for": 4, "object": 4,
     "five": 5, "chat": 5, "assistant": 5,
     "six": 6, "scene": 6, "describe": 6,
+    "seven":7, "color": 7, "colour": 7, "colors": 7,
     "stop": 0, "exit": 0, "quit": 0,
 }
 MODE_NAMES = {
@@ -115,6 +116,7 @@ MODE_NAMES = {
     4: "Object Detection",
     5: "Chat Assistant",
     6: "Scene Description",
+    7: "Color Recognition",
 }
 
 # Special (non-mode) voice commands
@@ -127,6 +129,12 @@ last_spoken_text = [""]    # Updated by TTS worker for "repeat" command
 
 # OCR-specific higher resolution (camera reconfigures on OCR mode switch)
 OCR_RESOLUTION = (640, 480)
+
+# Color recognition configuration
+COLOR_SAMPLE_SIZE = 40  # pixels. If None, use COLOR_SAMPLE_PERCENT of the frame short side.
+COLOR_SAMPLE_PERCENT = 0.05
+COLOR_TTS_COOLDOWN = 6.0  # seconds between TTS announcements for color changes
+COLOR_SMOOTHING_FRAMES = 5  # temporal smoothing window (frames)
 
 # TTS shutdown sentinel (safer than None — prevents accidental worker death)
 TTS_SHUTDOWN = object()

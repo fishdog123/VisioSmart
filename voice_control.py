@@ -25,7 +25,8 @@ def _handle_special_command(word):
             "Available commands: say one or currency for currency detection, "
             "two or face for face recognition, three or text for OCR, "
             "four or object for object detection, five or chat for assistant, "
-            "six or scene for scene description, stop to exit, repeat to hear last message, status to hear current mode."
+            "six or scene for scene description, or say color (or colour) for color recognition. "
+            "Say stop to exit, repeat to hear last message, status to hear current mode."
         )
     elif word == "repeat":
         last = last_spoken_text[0]
@@ -145,7 +146,7 @@ def start_voice_listener():
             tts_queue.put("Error: Microphone not found. Voice control is disabled.")
             return
 
-        print("[INFO] Voice control active. Say 'one', 'two', 'three', 'four', 'five', or 'stop'.")
+        print("[INFO] Voice control active. Say 'one', 'two', 'three', 'four', 'five', 'six', 'seven' or 'stop'.")
 
         kaldi_rec = vosk.KaldiRecognizer(vosk_model, 16000)
 
