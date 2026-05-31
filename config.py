@@ -107,6 +107,7 @@ VOICE_COMMANDS = {
     "five": 5, "chat": 5, "assistant": 5,
     "six": 6, "scene": 6, "describe": 6,
     "seven":7, "color": 7, "colour": 7, "colors": 7,
+    "eight": 8, "light": 8, "lights": 8,
     "stop": 0, "exit": 0, "quit": 0,
 }
 MODE_NAMES = {
@@ -117,6 +118,7 @@ MODE_NAMES = {
     5: "Chat Assistant",
     6: "Scene Description",
     7: "Color Recognition",
+    8: "Light Recognition",
 }
 
 # Special (non-mode) voice commands
