@@ -98,10 +98,6 @@ mode_lock = threading.Lock()
 # }
 
 CHAT_MODE = 5
-# VOICE_LISTEN_TIMEOUT = int(os.environ.get("VOICE_LISTEN_TIMEOUT", "10"))
-VOICE_LISTEN_TIMEOUT = None
-VOICE_PHRASE_TIME_LIMIT = int(os.environ.get("VOICE_PHRASE_TIME_LIMIT", "8"))
-
 # Lock used to serialize audio device access between TTS and microphone
 audio_lock = threading.RLock()
 

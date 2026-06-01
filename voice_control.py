@@ -12,7 +12,6 @@ from config import (
     VOICE_COMMANDS, SPECIAL_COMMANDS, MODE_NAMES, VOSK_MODEL_PATH,
     active_mode_ref, last_spoken_text, CHAT_MODE,
     append_llm_context, get_llm_context, llm_one_shot_queue,
-    audio_lock, VOICE_LISTEN_TIMEOUT, VOICE_PHRASE_TIME_LIMIT,
 )
 import llm_client
 
