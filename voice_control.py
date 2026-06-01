@@ -3,7 +3,7 @@ import os
 import time
 import threading
 import queue
-
+import pyaudio
 import speech_recognition as sr
 import vosk
 
@@ -45,13 +45,18 @@ def _handle_special_command(word):
 
 def _handle_voice_text(text):
     text = text.strip().lower()
-    for word in text.split():
+    words = text.split()
+    
+    # Check for commands first
+    for word in words:
         if word in SPECIAL_COMMANDS:
             _handle_special_command(word)
             return True
-        if active_mode_ref[0] == CHAT_MODE and word in ("chat", "assistant", "five"):
-            continue
         if word in VOICE_COMMANDS:
+            # Don't trigger a mode change if we are trying to talk to the chat assistant
+            if active_mode_ref[0] == CHAT_MODE and word in ("chat", "assistant", "five"):
+                continue
+                
             mode_num = VOICE_COMMANDS[word]
             with mode_lock:
                 current_mode[0] = mode_num
@@ -60,7 +65,7 @@ def _handle_voice_text(text):
             print(f"[VOICE] Recognized '{word}' -> mode {mode_num}")
             return True
 
-    # LLM only active in Chat mode
+    # If no structural commands matched, pass the whole text to the LLM (if in Chat Mode)
     if active_mode_ref[0] == CHAT_MODE:
         return _handle_chat_text(text)
 
@@ -87,19 +92,18 @@ def _handle_chat_text(text):
         return True
 
     if action.get("action") == "run_mode_once":
-        append_llm_context("user", text)
         response_queue = queue.Queue(maxsize=1)
         request = {"mode": action.get("mode"), "response_queue": response_queue}
         try:
             llm_one_shot_queue.put_nowait(request)
         except queue.Full:
-            tts_queue.put("Busy. Try again.")
+            tts_queue.put("System is busy. Please try again.")
             return True
 
         try:
             vision_result = response_queue.get(timeout=3)
         except queue.Empty:
-            tts_queue.put("Sorry, I could not get a result.")
+            tts_queue.put("Sorry, I could not get a result from the camera.")
             return True
 
         try:
@@ -112,10 +116,12 @@ def _handle_chat_text(text):
             )
         except Exception as e:
             print(f"[LLM] Finalize error: {e}")
-            tts_queue.put("LLM not available.")
+            tts_queue.put("LLM finalized response failed.")
             return True
 
         if final_action.get("action") == "respond":
+            # Context updated only after a successful complete lifecycle
+            append_llm_context("user", text) 
             tts_queue.put(final_action.get("text", ""))
         else:
             tts_queue.put("I could not answer that.")
@@ -123,106 +129,71 @@ def _handle_chat_text(text):
 
     tts_queue.put("I could not answer that.")
     return True
-
 def start_voice_listener():
     vosk.SetLogLevel(-1)
 
-    # Check if Vosk model exists
     if not os.path.exists(VOSK_MODEL_PATH):
         print(f"[WARNING] Vosk model not found at {VOSK_MODEL_PATH}")
-        print("[INFO] Voice control disabled")
         tts_queue.put("Warning: Voice model not found. Voice control is disabled.")
         return
 
-    vosk_model = vosk.Model(VOSK_MODEL_PATH)
+    model = vosk.Model(VOSK_MODEL_PATH)
+    # 16000Hz is the native rate for most lightweight Vosk models
+    rec = vosk.KaldiRecognizer(model, 16000)
 
     def listener():
+        p = pyaudio.PyAudio()
         try:
-            recognizer = sr.Recognizer()
-            mic = sr.Microphone()
-            # Initial ambient noise calibration
-            with mic as source:
-                recognizer.adjust_for_ambient_noise(source, duration=1)
+            # Open standard microphone input stream
+            stream = p.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                frames_per_buffer=4000 # ~0.25 seconds of audio per read
+            )
+            stream.start_stream()
         except Exception as e:
-            print(f"[ERROR] Microphone initialization failed: {e}")
-            tts_queue.put("Error: Microphone not found. Voice control is disabled.")
+            print(f"[ERROR] Failed to open microphone stream: {e}")
+            tts_queue.put("Error: Microphone could not be started.")
+            p.terminate()
             return
 
-        print("[INFO] Voice control active. Say 'one', 'two', 'three', 'four', 'five', 'six', 'seven' or 'stop'.")
+        print("[INFO] Voice control active. Listening continuously and naturally...")
 
-        kaldi_rec = vosk.KaldiRecognizer(vosk_model, 16000)
-
-        iteration = 0
         while True:
             try:
-                with mic as source:
-                    # Acquire audio lock while listening to avoid TTS/mic contention
-                    with audio_lock:
-                        audio = recognizer.listen(
-                            source,
-                            timeout=VOICE_LISTEN_TIMEOUT,
-                            phrase_time_limit=VOICE_PHRASE_TIME_LIMIT,
-                        )
+                # Read raw audio data from the mic buffer
+                # exception_on_overflow=False prevents crashes on slow machines
+                data = stream.read(4000, exception_on_overflow=False)
+                
+                if len(data) == 0:
+                    continue
 
-                raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
-
-                # Feed raw audio to Vosk and handle partial/interim/final results
-                accepted = kaldi_rec.AcceptWaveform(raw)
-                if accepted:
-                    result_json = json.loads(kaldi_rec.Result())
-                    print(f"[VOICE_DEBUG] Result: {result_json}")
+                # Feed data chunks instantly to Vosk
+                if rec.AcceptWaveform(data):
+                    # Vosk detected a natural pause/end of a phrase!
+                    result_json = json.loads(rec.Result())
+                    text = result_json.get("text", "").strip()
+                    
+                    if text:
+                        print(f"[VOICE] Heard (Natural End): {text}")
+                        _handle_voice_text(text)
                 else:
-                    # Partial/Intermediate result
-                    try:
-                        partial_json = json.loads(kaldi_rec.PartialResult())
-                    except Exception:
-                        partial_json = {}
-                    print(f"[VOICE_DEBUG] Partial: {partial_json}")
-                    # Also check FinalResult as a fallback
-                    try:
-                        final_json = json.loads(kaldi_rec.FinalResult())
-                    except Exception:
-                        final_json = {}
-                    print(f"[VOICE_DEBUG] FinalFallback: {final_json}")
-                    # Prefer partial text if present, otherwise final
-                    result_json = final_json if final_json.get("text") else partial_json
-
-                text = (result_json.get("text", "") if result_json else "").strip()
-                if not text:
-                    # As a last resort, call FinalResult() explicitly
-                    try:
-                        final_json = json.loads(kaldi_rec.FinalResult())
-                        text = final_json.get("text", "").strip()
-                        if final_json:
-                            print(f"[VOICE_DEBUG] Final explicit: {final_json}")
-                    except Exception:
-                        pass
-
-                if text:
-                    print(f"[VOICE] Heard: {text}")
-                    _handle_voice_text(text)
-
-                # Periodically recalibrate ambient noise
-                iteration += 1
-                if iteration % 120 == 0:
-                    try:
-                        with mic as source:
-                            recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                        print("[VOICE_DEBUG] Recalibrated ambient noise")
-                    except Exception:
-                        pass
-
-            except sr.WaitTimeoutError:
-                continue
-            except Exception as e:
-                print(f"[VOICE] Error: {e}")
-                tts_queue.put("Microphone error. Retrying.")
-                try:
-                    mic = sr.Microphone()
-                    with mic as source:
-                        recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                except Exception:
+                    # Optional: You can get interim/partial text here if you want 
+                    # to show live captions, but DO NOT call FinalResult() here.
                     pass
-                time.sleep(2)
+
+            except Exception as e:
+                print(f"[VOICE] Stream error: {e}")
+                break
+
+        # Cleanup if the loop breaks
+        try:
+            stream.stop_stream()
+            stream.close()
+        except Exception:
+            pass
+        p.terminate()
 
     threading.Thread(target=listener, daemon=True).start()
