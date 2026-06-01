@@ -110,6 +110,7 @@ VOICE_COMMANDS = {
     "six": 6, "6": 6, "scene": 6, "describe": 6,
     "seven": 7, "7": 7, "color": 7, "colour": 7, "colors": 7,
     "eight": 8, "8": 8, "light": 8, "lights": 8,
+}
 GEMINI_CHAT_MODE = 5
 LOCAL_LLM_CHAT_MODE = 6
 

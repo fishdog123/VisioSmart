@@ -55,7 +55,7 @@ def _handle_voice_text(text):
             continue
         if word in VOICE_COMMANDS:
             # Don't trigger a mode change if we are trying to talk to the chat assistant
-            if active_mode_ref[0] == CHAT_MODE and word in ("chat", "assistant", "five"):
+            if (active_mode_ref[0] == GEMINI_CHAT_MODE or active_mode_ref[0] == LOCAL_LLM_CHAT_MODE) and word in ("chat", "assistant", "five"):
                 continue
                 
             mode_num = VOICE_COMMANDS[word]
