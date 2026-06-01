@@ -98,17 +98,23 @@ mode_lock = threading.Lock()
 # }
 
 CHAT_MODE = 5
+# VOICE_LISTEN_TIMEOUT = int(os.environ.get("VOICE_LISTEN_TIMEOUT", "10"))
+VOICE_LISTEN_TIMEOUT = None
+VOICE_PHRASE_TIME_LIMIT = int(os.environ.get("VOICE_PHRASE_TIME_LIMIT", "8"))
+
+# Lock used to serialize audio device access between TTS and microphone
+audio_lock = threading.RLock()
 
 VOICE_COMMANDS = {
-    "one": 1, "won": 1, "currency": 1,
-    "two": 2, "too": 2, "to": 2, "face": 2,
-    "three": 3, "free": 3, "tree": 3, "ocr": 3, "text": 3,
-    "four": 4, "for": 4, "object": 4,
-    "five": 5, "chat": 5, "assistant": 5,
-    "six": 6, "scene": 6, "describe": 6,
-    "seven":7, "color": 7, "colour": 7, "colors": 7,
-    "eight": 8, "light": 8, "lights": 8,
-    "stop": 0, "exit": 0, "quit": 0,
+    "0": 0, "stop": 0, "exit": 0, "quit": 0,
+    "one": 1, "1": 1, "won": 1, "currency": 1,
+    "two": 2, "2": 2, "too": 2, "to": 2, "face": 2,
+    "three": 3, "3": 3, "free": 3, "tree": 3, "ocr": 3, "text": 3,
+    "four": 4, "4": 4, "for": 4, "object": 4,
+    "five": 5, "5": 5, "chat": 5, "assistant": 5,
+    "six": 6, "6": 6, "scene": 6, "describe": 6,
+    "seven": 7, "7": 7, "color": 7, "colour": 7, "colors": 7,
+    "eight": 8, "8": 8, "light": 8, "lights": 8,
 }
 MODE_NAMES = {
     1: "Currency Detection",
@@ -122,8 +128,7 @@ MODE_NAMES = {
 }
 
 # Special (non-mode) voice commands
-# SPECIAL_COMMANDS = {"help", "repeat", "status", "mode"}
-SPECIAL_COMMANDS ={}
+SPECIAL_COMMANDS = {"help", "repeat", "status", "mode"}
 
 # Shared state for special voice commands
 active_mode_ref = [None]   # Updated by main loop so voice can report it

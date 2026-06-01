@@ -9,6 +9,7 @@ from config import (
     TTS_AMPLITUDE,
     TTS_SHUTDOWN,
     append_llm_context,
+    audio_lock,
 )
 
 # ==========================================
@@ -18,28 +19,29 @@ TTS_TIMEOUT = 30 # seconds — prevents permanent hang if pw-play freezes
 
 def speak(text):
     try:
-        p1 = subprocess.Popen([
-            "espeak-ng",
-            "-v",
-            TTS_VOICE,
-            "-s",
-            str(TTS_SPEED),
-            "-a",
-            str(TTS_AMPLITUDE),
-            "--stdout",
-            text,
-        ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        p2 = subprocess.Popen(["pw-play","-"], stdin=p1.stdout, stderr=subprocess.DEVNULL)
-        p1.stdout.close()
-        try:
-            p2.communicate(timeout=TTS_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            p2.kill()
-            p1.kill()
-            p2.wait()
-            print(f"[TTS Warning] Speech timed out after {TTS_TIMEOUT}s, killed subprocess")
-        finally:
-            p1.wait()
+        with audio_lock:
+            p1 = subprocess.Popen([
+                "espeak-ng",
+                "-v",
+                TTS_VOICE,
+                "-s",
+                str(TTS_SPEED),
+                "-a",
+                str(TTS_AMPLITUDE),
+                "--stdout",
+                text,
+            ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            p2 = subprocess.Popen(["pw-play","-"], stdin=p1.stdout, stderr=subprocess.DEVNULL)
+            p1.stdout.close()
+            try:
+                p2.communicate(timeout=TTS_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                p2.kill()
+                p1.kill()
+                p2.wait()
+                print(f"[TTS Warning] Speech timed out after {TTS_TIMEOUT}s, killed subprocess")
+            finally:
+                p1.wait()
     except Exception as e:
         print(f"[TTS Error] {e}")
 

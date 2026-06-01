@@ -12,6 +12,7 @@ from config import (
     VOICE_COMMANDS, SPECIAL_COMMANDS, MODE_NAMES, VOSK_MODEL_PATH,
     active_mode_ref, last_spoken_text, CHAT_MODE,
     append_llm_context, get_llm_context, llm_one_shot_queue,
+    audio_lock, VOICE_LISTEN_TIMEOUT, VOICE_PHRASE_TIME_LIMIT,
 )
 import llm_client
 
@@ -139,6 +140,7 @@ def start_voice_listener():
         try:
             recognizer = sr.Recognizer()
             mic = sr.Microphone()
+            # Initial ambient noise calibration
             with mic as source:
                 recognizer.adjust_for_ambient_noise(source, duration=1)
         except Exception as e:
@@ -150,17 +152,66 @@ def start_voice_listener():
 
         kaldi_rec = vosk.KaldiRecognizer(vosk_model, 16000)
 
+        iteration = 0
         while True:
             try:
                 with mic as source:
-                    audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
+                    # Acquire audio lock while listening to avoid TTS/mic contention
+                    with audio_lock:
+                        audio = recognizer.listen(
+                            source,
+                            timeout=VOICE_LISTEN_TIMEOUT,
+                            phrase_time_limit=VOICE_PHRASE_TIME_LIMIT,
+                        )
+
                 raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
-                kaldi_rec.AcceptWaveform(raw)
-                result = json.loads(kaldi_rec.FinalResult())
-                text = result.get("text", "").strip()
+
+                # Feed raw audio to Vosk and handle partial/interim/final results
+                accepted = kaldi_rec.AcceptWaveform(raw)
+                if accepted:
+                    result_json = json.loads(kaldi_rec.Result())
+                    print(f"[VOICE_DEBUG] Result: {result_json}")
+                else:
+                    # Partial/Intermediate result
+                    try:
+                        partial_json = json.loads(kaldi_rec.PartialResult())
+                    except Exception:
+                        partial_json = {}
+                    print(f"[VOICE_DEBUG] Partial: {partial_json}")
+                    # Also check FinalResult as a fallback
+                    try:
+                        final_json = json.loads(kaldi_rec.FinalResult())
+                    except Exception:
+                        final_json = {}
+                    print(f"[VOICE_DEBUG] FinalFallback: {final_json}")
+                    # Prefer partial text if present, otherwise final
+                    result_json = final_json if final_json.get("text") else partial_json
+
+                text = (result_json.get("text", "") if result_json else "").strip()
+                if not text:
+                    # As a last resort, call FinalResult() explicitly
+                    try:
+                        final_json = json.loads(kaldi_rec.FinalResult())
+                        text = final_json.get("text", "").strip()
+                        if final_json:
+                            print(f"[VOICE_DEBUG] Final explicit: {final_json}")
+                    except Exception:
+                        pass
+
                 if text:
                     print(f"[VOICE] Heard: {text}")
                     _handle_voice_text(text)
+
+                # Periodically recalibrate ambient noise
+                iteration += 1
+                if iteration % 120 == 0:
+                    try:
+                        with mic as source:
+                            recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                        print("[VOICE_DEBUG] Recalibrated ambient noise")
+                    except Exception:
+                        pass
+
             except sr.WaitTimeoutError:
                 continue
             except Exception as e:
