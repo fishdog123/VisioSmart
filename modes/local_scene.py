@@ -5,13 +5,13 @@ import requests
 import threading
 import time
 from config import (
-    tts_queue, 
-    HEADLESS_MODE, 
-    LLM_MODEL, 
-    LLM_URL, 
-    LLM_TEMPERATURE, 
-    LLM_TOP_P, 
-    LLM_TOP_K, 
+    tts_queue,
+    HEADLESS_MODE,
+    SCENE_MODEL,
+    LLM_URL,
+    LLM_TEMPERATURE,
+    LLM_TOP_P,
+    LLM_TOP_K,
     LLM_TIMEOUT_SEC
 )
 
@@ -48,7 +48,7 @@ class LocalSceneDescriber:
 
     def process(self, frame):
         """
-        Evaluates the scene non-blockingly. If cooldown has passed and no inference 
+        Evaluates the scene non-blockingly. If cooldown has passed and no inference
         is active, it dispatches a background worker thread so the camera stream doesn't freeze.
         """
         if not self.completed:
@@ -58,7 +58,7 @@ class LocalSceneDescriber:
                     if not self._pending:
                         self._pending = True
                         # Shallow copy to prevent mutations while thread runs
-                        worker_frame = frame.copy() 
+                        worker_frame = frame.copy()
                         threading.Thread(
                             target=self._describe_frame_async,
                             args=(worker_frame,),
@@ -90,7 +90,7 @@ class LocalSceneDescriber:
     def _describe_frame(self, frame):
         """Handles file serialization, base64 compilation, and local VLM routing."""
         image_path = "/tmp/vlm_scene_capture.jpg"
-        
+
         try:
             frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             cv2.imwrite(image_path, frame_bgr)
@@ -104,10 +104,10 @@ class LocalSceneDescriber:
         try:
             print("[VLM] Packaging image payload for SmolVLM...")
             image_data_url = self._get_image_base64_url(image_path)
-            
+
             messages = [
                 {
-                    "role": "system", 
+                    "role": "system",
                     "content": SCENE_VLM_PROMPT
                 },
                 {
@@ -121,23 +121,23 @@ class LocalSceneDescriber:
                     ]
                 }
             ]
-            
+
             payload = {
-                "model": LLM_MODEL,
+                "model": SCENE_MODEL,
                 "messages": messages,
                 "temperature": LLM_TEMPERATURE,
                 "top_p": LLM_TOP_P,
                 "top_k": LLM_TOP_K,
             }
-            
+
             print(f"[VLM] Sending POST request to local endpoint: {LLM_URL}")
             response = requests.post(LLM_URL, json=payload, timeout=LLM_TIMEOUT_SEC)
             response.raise_for_status()
-            
+
             data = response.json()
             content = data["choices"][0]["message"]["content"].strip()
             print(f"[VLM] Raw Description: {content}")
-            
+
             # Unpack accidental structural JSON returns if your small VLM outputs quirks
             if content.startswith("{"):
                 start = content.find('"text":')
@@ -146,7 +146,7 @@ class LocalSceneDescriber:
                     end = sub.find('"')
                     if end != -1:
                         return sub[:end]
-            
+
             return content
 
         except Exception as exc:

@@ -184,7 +184,8 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 # LLM (Chat Mode)
 # ==========================================
 LLM_URL = "http://localhost:8080/v1/chat/completions"
-LLM_MODEL = "qwen"
+LLM_MODEL = "qwen-chat"
+SCENE_MODEL ="smolvlm-vision"
 LLM_TIMEOUT_SEC = 30
 LLM_MAX_TOKENS = 140
 LLM_TEMPERATURE = 0.6
