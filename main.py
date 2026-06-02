@@ -198,20 +198,14 @@ def main():
             if new_mode == 0:
                 break
 
-            if active_mode_ref[0] is None and active_mode is not None:
-                print("[SYSTEM] Active mode reference was cleared. Resetting pipeline variables.")
-                if active_mode in processors and hasattr(processors[active_mode], 'reset'):
-                    processors[active_mode].reset()
-                reconfigure_camera(RESOLUTION)
-                active_mode = None
-
             if new_mode is not None and new_mode != active_mode:
                 if new_mode in failed_modes:
                     tts_queue.put(f"{MODE_NAMES.get(new_mode, 'Mode')} failed to load and is unavailable.")
                 elif new_mode == GEMINI_CHAT_MODE or new_mode == LOCAL_LLM_CHAT_MODE:
                     active_mode = new_mode
                     active_mode_ref[0] = active_mode
-                    tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
+                    if tts_queue.qsize() < 2:
+                        tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
                     print(f"[MODE] Switched to: {MODE_NAMES[active_mode]}")
                 elif new_mode in processors:
                             # Reset outgoing processor state (e.g. OCR recent_texts)
@@ -220,18 +214,14 @@ def main():
                     # Reset the incoming processor to allow one-shot modes to re-run cleanly
                     if new_mode in processors and hasattr(processors[new_mode], 'reset'):
                         processors[new_mode].reset()
-                    # Clear pending TTS messages from the previous mode
-                    with tts_queue.mutex:
-                        dropped = len(tts_queue.queue)
-                        tts_queue.queue.clear()
-                        tts_queue.unfinished_tasks = max(tts_queue.unfinished_tasks - dropped, 0)
-                        tts_queue.not_full.notify_all()
+
                     # Reconfigure camera for OCR (higher res) or back to default
                     target_res = OCR_RESOLUTION if new_mode == 3 else RESOLUTION
                     reconfigure_camera(target_res)
                     active_mode = new_mode
                     active_mode_ref[0] = active_mode
-                    tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
+                    if tts_queue.qsize() < 2:
+                        tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
                     print(f"[MODE] Switched to: {MODE_NAMES[active_mode]}")
                 else:
                     tts_queue.put("Still loading, please wait.")

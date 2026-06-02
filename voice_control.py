@@ -46,7 +46,7 @@ def _handle_voice_text(text):
     text = text.strip().lower()
     words = text.split()
     # Check for commands first
-    for word in words:
+    for word in set(words):
         if word in SPECIAL_COMMANDS:
             _handle_special_command(word)
             return True
@@ -58,7 +58,8 @@ def _handle_voice_text(text):
                 continue
             mode_num = VOICE_COMMANDS[word]
             with mode_lock:
-                current_mode[0] = mode_num
+                if current_mode[0] is None:
+                    current_mode[0] = mode_num
             if mode_num == 0:
                 tts_queue.put("Exiting. Goodbye.")
             print(f"[VOICE] Recognized '{word}' -> mode {mode_num}")

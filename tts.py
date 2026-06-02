@@ -68,20 +68,28 @@ def speak(text):
                 pygame.mixer.music.play()
 
                 # Block safely inside the lock while the audio plays out
+                start_time = time.time()
                 while pygame.mixer.music.get_busy():
                     time.sleep(0.05)
-
+                    if time.time() - start_time > 30.0: # No sentence should take > 30s
+                        print("[TTS Timeout] Audio driver hung up. Forcing unload.")
+                        break
+                print("[TTS] playback finished")
                 # Unload immediately so the file asset isn't locked on disk
                 pygame.mixer.music.unload()
 
-            except pygame.error as audio_err:
-                print(f"[TTS Device Hot-Plug Warning] Audio routing altered mid-stream: {audio_err}")
-                # Attempt a quick re-init to sync with PipeWire's new default device destination
+
+            except Exception as mixer_err:
+                print(f"[TTS] Mixer failed: {mixer_err}")
+
                 try:
-                    pygame.mixer.quit()
-                    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=1024)
-                except:
-                    pass
+                    pygame.mixer.music.stop()
+                    pygame.mixer.music.unload()
+                    time.sleep(0.2)
+
+                    print("[TTS] Mixer recovered")
+                except Exception as e:
+                    print(f"[TTS] Recovery failed: {e}")
 
     except Exception as e:
         print(f"[TTS Unexpected Error] {e}")
