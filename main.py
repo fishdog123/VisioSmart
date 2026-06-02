@@ -204,8 +204,7 @@ def main():
                 elif new_mode == GEMINI_CHAT_MODE or new_mode == LOCAL_LLM_CHAT_MODE:
                     active_mode = new_mode
                     active_mode_ref[0] = active_mode
-                    if tts_queue.qsize() < 2:
-                        tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
+                    tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
                     print(f"[MODE] Switched to: {MODE_NAMES[active_mode]}")
                 elif new_mode in processors:
                             # Reset outgoing processor state (e.g. OCR recent_texts)
@@ -220,8 +219,7 @@ def main():
                     reconfigure_camera(target_res)
                     active_mode = new_mode
                     active_mode_ref[0] = active_mode
-                    if tts_queue.qsize() < 2:
-                        tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
+                    tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
                     print(f"[MODE] Switched to: {MODE_NAMES[active_mode]}")
                 else:
                     tts_queue.put("Still loading, please wait.")

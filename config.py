@@ -70,6 +70,8 @@ tts_queue = _BoundedTTSQueue(maxsize=20)
 TTS_VOICE = "en"
 TTS_SPEED = 150
 TTS_AMPLITUDE = 160  # espeak-ng amplitude (0-200). Increase for louder output.
+MODEL_PATH = "en_US-joe-medium.onnx"
+OUTPUT_WAV = "/tmp/tts_output.wav"
 
 
 # =========================

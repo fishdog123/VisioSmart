@@ -1,10 +1,9 @@
 import os
-import time
 import wave
-import json
 import threading
-import pygame
+import subprocess
 from piper import PiperVoice
+from config import  MODEL_PATH, OUTPUT_WAV
 
 from config import (
     tts_queue,
@@ -14,27 +13,14 @@ from config import (
     audio_lock,
 )
 
-# --- SYSTEM CONFIGURATION ---
-MODEL_PATH = "en_US-joe-medium.onnx"
-CONFIG_PATH = "en_US-joe-medium.onnx.json"
-OUTPUT_WAV = "/tmp/tts_output.wav"
-
 # Load the voice model once globally during setup
 if os.path.exists(MODEL_PATH):
+    print(f"[TTS INFO] Loading Piper voice model from {MODEL_PATH}...")
     voice = PiperVoice.load(MODEL_PATH)
+    print("[TTS INFO] Piper model loaded successfully.")
 else:
-    print(f"[TTS WARNING] Piper model not found at {MODEL_PATH}")
+    print(f"[TTS CRITICAL ERROR] Piper model not found at {MODEL_PATH}")
     voice = None
-
-# --- NEW: STATIC MIXER INITIALIZATION ---
-# Initialize the sound system ONCE at system start.
-# 22050Hz is standard for Piper medium models, stereo (channels=2) forces
-# PipeWire to cleanly mirror the mono voice stream to both your left and right earbuds.
-try:
-    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=1024)
-    print("[TTS INFO] Pygame audio mixer initialized successfully.")
-except Exception as e:
-    print(f"[TTS CRITICAL ERROR] Failed to initialize mixer: {e}")
 
 
 def speak(text):
@@ -59,37 +45,21 @@ def speak(text):
             print("[TTS Error] Piper generated an empty or corrupt audio track.")
             return
 
-        # 4. Play the track using the persistent audio channel
+        # 4. Play the track natively using the OS audio server
         with audio_lock:
             try:
-                # If earbuds connected/disconnected right before this, load might choke.
-                # Wrapping it in an inner try-except block guarantees stability.
-                pygame.mixer.music.load(OUTPUT_WAV)
-                pygame.mixer.music.play()
+                # If Bluetooth reconnects, PipeWire instantly routes it correctly.
+                subprocess.run(["pw-play", OUTPUT_WAV], check=True)
 
-                # Block safely inside the lock while the audio plays out
-                start_time = time.time()
-                while pygame.mixer.music.get_busy():
-                    time.sleep(0.05)
-                    if time.time() - start_time > 30.0: # No sentence should take > 30s
-                        print("[TTS Timeout] Audio driver hung up. Forcing unload.")
-                        break
-                print("[TTS] playback finished")
-                # Unload immediately so the file asset isn't locked on disk
-                pygame.mixer.music.unload()
+            except FileNotFoundError:
+                # Safe fallback to standard ALSA player if pw-play isn't found
+                subprocess.run(["aplay", "-q", OUTPUT_WAV], check=True)
 
+            except subprocess.CalledProcessError as e:
+                print(f"[TTS Playback Error] Command failed: {e}")
 
-            except Exception as mixer_err:
-                print(f"[TTS] Mixer failed: {mixer_err}")
-
-                try:
-                    pygame.mixer.music.stop()
-                    pygame.mixer.music.unload()
-                    time.sleep(0.2)
-
-                    print("[TTS] Mixer recovered")
-                except Exception as e:
-                    print(f"[TTS] Recovery failed: {e}")
+            except Exception as playback_err:
+                print(f"[TTS Playback Error] Unexpected failure: {playback_err}")
 
     except Exception as e:
         print(f"[TTS Unexpected Error] {e}")
