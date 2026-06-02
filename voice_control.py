@@ -12,6 +12,7 @@ from config import (
     VOICE_COMMANDS, SPECIAL_COMMANDS, MODE_NAMES, VOSK_MODEL_PATH,
     active_mode_ref, last_spoken_text, LOCAL_LLM_CHAT_MODE, GEMINI_CHAT_MODE,
     append_llm_context, get_llm_context, llm_one_shot_queue,
+    tts_playing, AUDIO_RETRY_SEC,
 )
 import llm_client
 
@@ -144,6 +145,8 @@ def _handle_chat_text(text):
 
     tts_queue.put("I could not answer that.")
     return True
+
+
 def start_voice_listener():
     vosk.SetLogLevel(-1)
 
@@ -158,26 +161,61 @@ def start_voice_listener():
 
     def listener():
         p = pyaudio.PyAudio()
-        try:
-            # Open standard microphone input stream
-            stream = p.open(
-                format=pyaudio.paInt16,
-                channels=1,
-                rate=16000,
-                input=True,
-                frames_per_buffer=4000 # ~0.25 seconds of audio per read
-            )
-            stream.start_stream()
-        except Exception as e:
-            print(f"[ERROR] Failed to open microphone stream: {e}")
-            tts_queue.put("Error: Microphone could not be started.")
-            p.terminate()
-            return
+        stream = None
+        paused_for_tts = False
+
+        def _close_stream():
+            nonlocal stream
+            if stream is None:
+                return
+            try:
+                stream.stop_stream()
+            except Exception:
+                pass
+            try:
+                stream.close()
+            except Exception:
+                pass
+            stream = None
+
+        def _open_stream():
+            nonlocal stream
+            try:
+                stream = p.open(
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=16000,
+                    input=True,
+                    frames_per_buffer=4000,  # ~0.25 seconds of audio per read
+                )
+                stream.start_stream()
+                return True
+            except Exception as e:
+                print(f"[VOICE] Microphone open failed: {e}")
+                _close_stream()
+                return False
 
         print("[INFO] Voice control active. Listening continuously and naturally...")
 
         while True:
             try:
+                if tts_playing.is_set():
+                    if stream is not None:
+                        _close_stream()
+                    if not paused_for_tts:
+                        print("[VOICE] Pausing mic while TTS plays.")
+                        paused_for_tts = True
+                    time.sleep(0.05)
+                    continue
+                if paused_for_tts:
+                    print("[VOICE] Resuming mic capture.")
+                    paused_for_tts = False
+
+                if stream is None:
+                    if not _open_stream():
+                        time.sleep(AUDIO_RETRY_SEC)
+                        continue
+
                 # Read raw audio data from the mic buffer
                 # exception_on_overflow=False prevents crashes on slow machines
                 data = stream.read(4000, exception_on_overflow=False)
@@ -199,14 +237,12 @@ def start_voice_listener():
 
             except Exception as e:
                 print(f"[VOICE] Stream error: {e}")
-                break
+                _close_stream()
+                time.sleep(AUDIO_RETRY_SEC)
+                continue
 
         # Cleanup if the loop breaks
-        try:
-            stream.stop_stream()
-            stream.close()
-        except Exception:
-            pass
+        _close_stream()
         p.terminate()
 
     threading.Thread(target=listener, daemon=True).start()
