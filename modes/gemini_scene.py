@@ -27,7 +27,6 @@ class GeminiSceneDescriber:
         self.completed = False
         self._pending = False
         self._lock = threading.Lock()
-        self._generation = 0
         print("[INFO] Gemini scene describer ready.")
 
     def reset(self):
@@ -36,7 +35,6 @@ class GeminiSceneDescriber:
         self.last_no_detect_time = 0
         with self._lock:
             self._pending = False
-            self._generation += 1
 
     def process(self, frame):
         if not self.completed:
@@ -45,11 +43,10 @@ class GeminiSceneDescriber:
                 with self._lock:
                     if not self._pending:
                         self._pending = True
-                        generation = self._generation
                         worker_frame = frame.copy()
                         threading.Thread(
                             target=self._describe_frame_async,
-                            args=(worker_frame, generation),
+                            args=(worker_frame,),
                             daemon=True,
                         ).start()
 
@@ -58,12 +55,9 @@ class GeminiSceneDescriber:
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         return frame
 
-    def _describe_frame_async(self, frame, generation):
+    def _describe_frame_async(self, frame):
         description = self._describe_frame(frame)
         with self._lock:
-            if generation != self._generation:
-                self._pending = False
-                return
             self._pending = False
 
         if description:

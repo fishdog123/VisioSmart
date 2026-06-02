@@ -70,10 +70,6 @@ tts_queue = _BoundedTTSQueue(maxsize=20)
 TTS_VOICE = "en"
 TTS_SPEED = 150
 TTS_AMPLITUDE = 160  # espeak-ng amplitude (0-200). Increase for louder output.
-TTS_PRE_PLAY_DELAY_SEC = 0.2
-TTS_MIXER_BUFFER = 2048
-TTS_START_GRACE_SEC = 0.25
-TTS_MIN_PLAY_SEC = 0.3
 
 
 # =========================
@@ -96,11 +92,6 @@ mode_lock = threading.Lock()
 
 # Lock used to serialize audio device access between TTS and microphone
 audio_lock = threading.RLock()
-
-# Audio coordination for shared Bluetooth devices
-tts_playing = threading.Event()
-AUDIO_RETRY_SEC = 2.0
-AUDIO_MAX_RETRY_SEC = 12.0
 
 VOICE_COMMANDS = {
     "0": 0, "stop": 0, "exit": 0, "quit": 0,
