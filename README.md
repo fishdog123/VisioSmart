@@ -185,5 +185,3 @@ This approach ensures the exact wheels used on the Pi are recorded (important fo
 
 ## Notes
 - The face-embeddings pickle and some model files are expected to be produced or downloaded on the Raspberry Pi; the repo does not include large model binaries. You mentioned you already have a prebuilt face DB and scripts on the Pi — this README references `FACE_DB_PATH` from `config.py` and does not attempt to recreate that DB here.
-
-If you want, I can now generate a `requirements.txt` from this environment (I do not recommend it for Pi-specific native wheels) or prepare an automated model-download script. Which do you prefer?
