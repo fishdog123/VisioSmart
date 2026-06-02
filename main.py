@@ -198,6 +198,13 @@ def main():
             if new_mode == 0:
                 break
 
+            if active_mode_ref[0] is None and active_mode is not None:
+                print("[SYSTEM] Active mode reference was cleared. Resetting pipeline variables.")
+                if active_mode in processors and hasattr(processors[active_mode], 'reset'):
+                    processors[active_mode].reset()
+                reconfigure_camera(RESOLUTION)
+                active_mode = None
+
             if new_mode is not None and new_mode != active_mode:
                 if new_mode in failed_modes:
                     tts_queue.put(f"{MODE_NAMES.get(new_mode, 'Mode')} failed to load and is unavailable.")

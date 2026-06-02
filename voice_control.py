@@ -45,7 +45,6 @@ def _handle_special_command(word):
 def _handle_voice_text(text):
     text = text.strip().lower()
     words = text.split()
-    
     # Check for commands first
     for word in words:
         if word in SPECIAL_COMMANDS:
@@ -57,7 +56,6 @@ def _handle_voice_text(text):
             # Don't trigger a mode change if we are trying to talk to the chat assistant
             if (active_mode_ref[0] == GEMINI_CHAT_MODE or active_mode_ref[0] == LOCAL_LLM_CHAT_MODE) and word in ("chat", "assistant", "five"):
                 continue
-                
             mode_num = VOICE_COMMANDS[word]
             with mode_lock:
                 current_mode[0] = mode_num
@@ -85,6 +83,14 @@ def _handle_chat_text(text):
     except Exception as e:
         print(f"[LLM] Error: {e}")
         tts_queue.put("LLM not available.")
+        return True
+
+    if action.get("action") == "error":
+        tts_queue.put(action.get("text", "An error occurred."))
+        with mode_lock:
+            current_mode[0] = None
+        active_mode_ref[0] = None
+        print(f"[LLM] Error action: {action.get('text', '')}")
         return True
 
     if action.get("action") == "respond":
@@ -120,9 +126,16 @@ def _handle_chat_text(text):
             tts_queue.put("LLM finalized response failed.")
             return True
 
+        if final_action.get("action") == "error":
+            tts_queue.put(final_action.get("text", "An error occurred."))
+            with mode_lock:
+                current_mode[0] = None
+            active_mode_ref[0] = None
+            print(f"[LLM] Error action: {final_action.get('text', '')}")
+            return True
+
         if final_action.get("action") == "respond":
-            # Context updated only after a successful complete lifecycle
-            append_llm_context("user", text) 
+            append_llm_context("user", text)
             tts_queue.put(final_action.get("text", ""))
         else:
             tts_queue.put("I could not answer that.")
@@ -167,7 +180,6 @@ def start_voice_listener():
                 # Read raw audio data from the mic buffer
                 # exception_on_overflow=False prevents crashes on slow machines
                 data = stream.read(4000, exception_on_overflow=False)
-                
                 if len(data) == 0:
                     continue
 
@@ -176,12 +188,11 @@ def start_voice_listener():
                     # Vosk detected a natural pause/end of a phrase!
                     result_json = json.loads(rec.Result())
                     text = result_json.get("text", "").strip()
-                    
                     if text:
                         print(f"[VOICE] Heard (Natural End): {text}")
                         _handle_voice_text(text)
                 else:
-                    # Optional: You can get interim/partial text here if you want 
+                    # Optional: You can get interim/partial text here if you want
                     # to show live captions, but DO NOT call FinalResult() here.
                     pass
 

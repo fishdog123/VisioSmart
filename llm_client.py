@@ -52,11 +52,11 @@ FINALIZE_PROMPT = (
 
 def _post_local_llm(system_content, context, user_text):
     """
-    Accepts standardized signature parameters and maps them 
+    Accepts standardized signature parameters and maps them
     to an OpenAI-compatible Messages array for local endpoints.
     """
     messages = [{"role": "system", "content": system_content}]
-    
+
     for item in context or []:
         role = item.get("role")
         text = item.get("content", "")
@@ -66,7 +66,7 @@ def _post_local_llm(system_content, context, user_text):
                 "role": "user" if role == "user" else "assistant",
                 "content": text
             })
-            
+
     messages.append({"role": "user", "content": user_text})
 
     payload = {
@@ -76,12 +76,16 @@ def _post_local_llm(system_content, context, user_text):
         "top_p": LLM_TOP_P,
         "top_k": LLM_TOP_K,
     }
-    
-    response = requests.post(LLM_URL, json=payload, timeout=LLM_TIMEOUT_SEC)
-    response.raise_for_status()
+
+    try:
+        response = requests.post(LLM_URL, json=payload, timeout=LLM_TIMEOUT_SEC)
+        response.raise_for_status()
+    except Exception as e:
+        print(f"[LOCAL LLM] Error: {e}")
+        return "__ERROR__"
     data = response.json()
     content = data["choices"][0]["message"]["content"].strip()
-    
+
     if not HEADLESS_MODE:
         print(f"[LOCAL LLM] Raw: {content}")
     return content
@@ -122,13 +126,17 @@ def _post_gemini(system_content, context, user_text):
     }
 
     url = f"{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent"
-    response = requests.post(
-        url,
-        params={"key": GEMINI_API_KEY},
-        json=payload,
-        timeout=LLM_TIMEOUT_SEC,
-    )
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            url,
+            params={"key": GEMINI_API_KEY},
+            json=payload,
+            timeout=LLM_TIMEOUT_SEC,
+        )
+        response.raise_for_status()
+    except Exception as e:
+        print(f"[GEMINI] Error: {e}")
+        return "__ERROR__"
     data = response.json()
     candidates = data.get("candidates", [])
     if not candidates:
@@ -155,6 +163,8 @@ def _extract_json(content):
 
 
 def _parse_action(content):
+    if content == "__ERROR__":
+        return {"action": "error", "text": "Sorry, there was an error processing your request."}
     if not content:
         return {"action": "respond", "text": "Sorry, I did not get a response."}
     raw = content
@@ -197,7 +207,7 @@ def _trim_context(context, system_content, user_text):
         content = item.get("content", "")
         if not content:
             continue
-        item_len = len(content) + 10  
+        item_len = len(content) + 10
         if running + item_len > budget:
             break
         trimmed.append(item)
@@ -212,14 +222,14 @@ def chat_once(user_text, context, active_mode):
         system_parts.append(f"Current active mode: {MODE_NAMES.get(active_mode, 'None')}.")
     system_content = " ".join(system_parts)
     trimmed = _trim_context(context, system_content, user_text)
-    
+
     if active_mode == 5:
         content = _post_gemini(system_content, trimmed, user_text)
     elif active_mode == 6:
         content = _post_local_llm(system_content, trimmed, user_text)
     else:
         content = _post_gemini(system_content, trimmed, user_text)
-        
+
     return _parse_action(content)
 
 
@@ -230,12 +240,12 @@ def finalize_response(user_text, context, active_mode, vision_result):
     system_parts.append(f"Vision result: {vision_result}")
     system_content = " ".join(system_parts)
     trimmed = _trim_context(context, system_content, user_text)
-    
+
     if active_mode == 5:
         content = _post_gemini(system_content, trimmed, user_text)
     elif active_mode == 6:
         content = _post_local_llm(system_content, trimmed, user_text)
     else:
         content = _post_gemini(system_content, trimmed, user_text)
-        
+
     return _parse_action(content)
