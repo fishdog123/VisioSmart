@@ -89,13 +89,6 @@ MONEY = {
 # ==========================================
 current_mode = [None]
 mode_lock = threading.Lock()
-# VOICE_COMMANDS = {
-#     "one": 1, "won": 1,
-#     "two": 2, "to": 2, "too": 2,
-#     "three": 3, "free": 3, "tree": 3,
-#     "four": 4, "for": 4,
-#     "stop": 0, "exit": 0, "quit": 0,
-# }
 
 # Lock used to serialize audio device access between TTS and microphone
 audio_lock = threading.RLock()
@@ -106,25 +99,15 @@ VOICE_COMMANDS = {
     "two": 2, "2": 2, "too": 2, "to": 2, "face": 2,
     "three": 3, "3": 3, "free": 3, "tree": 3, "ocr": 3, "text": 3,
     "four": 4, "4": 4, "for": 4, "object": 4,
-    "five": 5, "5": 5, "chat": 5, "assistant": 5,
-    "six": 6, "6": 6, "scene": 6, "describe": 6,
-    "seven": 7, "7": 7, "color": 7, "colour": 7, "colors": 7,
-    "eight": 8, "8": 8, "light": 8, "lights": 8,
+    "five": 5, "5": 5,
+    "six": 6, "6": 6,
+    "seven": 7, "7": 7,
+    "eight": 8, "8": 8,
+    "nine": 9, "9": 9, "color": 9, "colour": 9, "colors": 9,
+    "ten": 10, "10": 10, "light": 10, "lights": 10,
 }
 GEMINI_CHAT_MODE = 5
 LOCAL_LLM_CHAT_MODE = 6
-
-# VOICE_COMMANDS = {
-#     "one": 1, "won": 1, "currency": 1,
-#     "two": 2, "too": 2, "to": 2, "face": 2,
-#     "three": 3, "free": 3, "tree": 3, "ocr": 3, "text": 3,
-#     "four": 4, "for": 4, "object": 4,
-#     "five": 5, "chat": 5, "assistant": 5,
-#     "six": 6, "scene": 6, "describe": 6,
-#     "seven":7, "color": 7, "colour": 7, "colors": 7,
-#     "eight": 8, "light": 8, "lights": 8,
-#     "stop": 0, "exit": 0, "quit": 0,
-# }
 
 MODE_NAMES = {
     1: "Currency Detection",
@@ -186,7 +169,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 LLM_URL = "http://localhost:8080/v1/chat/completions"
 LLM_MODEL = "qwen-chat"
 SCENE_MODEL ="smolvlm-vision"
-LLM_TIMEOUT_SEC = 30
+LLM_TIMEOUT_SEC = 90
 LLM_MAX_TOKENS = 140
 LLM_TEMPERATURE = 0.6
 LLM_TOP_P = 0.8
