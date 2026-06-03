@@ -51,11 +51,11 @@ def _handle_voice_text(text):
         if word in SPECIAL_COMMANDS:
             _handle_special_command(word)
             return True
-        if (active_mode_ref[0] in (GEMINI_CHAT_MODE, LOCAL_LLM_CHAT_MODE)) and word in ("chat", "assistant", "five", "six", "5", "6"):
-            continue
+        # if (active_mode_ref[0] in (GEMINI_CHAT_MODE, LOCAL_LLM_CHAT_MODE)) and word in ("chat", "assistant", "five", "six", "5", "6"):
+        #     continue
         if word in VOICE_COMMANDS:
-            if (active_mode_ref[0] in (GEMINI_CHAT_MODE, LOCAL_LLM_CHAT_MODE)) and word in ("chat", "assistant", "five", "six", "5", "6"):
-                continue
+            # if (active_mode_ref[0] in (GEMINI_CHAT_MODE, LOCAL_LLM_CHAT_MODE)) and word in ("chat", "assistant", "five", "six", "5", "6"):
+            #     continue
             mode_num = VOICE_COMMANDS[word]
             with mode_lock:
                 if current_mode[0] is None:
