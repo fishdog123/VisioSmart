@@ -15,9 +15,38 @@ from config import (
 )
 import llm_client
 
+pending_llm_text = [""]
+awaiting_llm_confirmation = [False]
 # ==========================================
 # VOICE CONTROL
 # ==========================================
+
+def _handle_llm_confirmation(text):
+    t = text.strip().lower()
+
+    yes_words = {"yes", "yeah", "yep", "correct", "confirm", "right", "sure", "ok", "okay"}
+    no_words = {"no", "nope", "cancel", "wrong", "stop"}
+
+    if t in yes_words:
+        user_text = pending_llm_text[0]
+        pending_llm_text[0] = ""
+        awaiting_llm_confirmation[0] = False
+
+        if user_text:
+            return _handle_chat_text(user_text)
+
+        tts_queue.put("Nothing to confirm.")
+        return True
+
+    if t in no_words:
+        pending_llm_text[0] = ""
+        awaiting_llm_confirmation[0] = False
+        tts_queue.put("Okay, say it again.")
+        return True
+
+    tts_queue.put("Please say yes or no.")
+    return True
+
 def _handle_special_command(word):
     """Handle non-mode voice commands: help, repeat, status/mode."""
     if word == "help":
@@ -45,6 +74,10 @@ def _handle_special_command(word):
 
 def _handle_voice_text(text):
     text = text.strip().lower()
+
+    if awaiting_llm_confirmation[0]:
+        return _handle_llm_confirmation(text)
+
     words = text.split()
     # Check for commands first
     for word in set(words):
@@ -66,11 +99,13 @@ def _handle_voice_text(text):
             return True
 
     # LLM only active in Chat mode
-    if (active_mode_ref[0] == GEMINI_CHAT_MODE or active_mode_ref[0] == LOCAL_LLM_CHAT_MODE):
-        return _handle_chat_text(text)
+    if active_mode_ref[0] in (GEMINI_CHAT_MODE, LOCAL_LLM_CHAT_MODE):
+        pending_llm_text[0] = text
+        awaiting_llm_confirmation[0] = True
+        tts_queue.put("Did you say: " + text + "?")
+        return True
 
     return False
-
 
 def _handle_chat_text(text):
     if not text:
