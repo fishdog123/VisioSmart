@@ -226,7 +226,9 @@ def chat_once(user_text, context, active_mode):
     if active_mode == 5:
         content = _post_gemini(system_content, trimmed, user_text)
     elif active_mode == 6:
-        content = _post_local_llm(system_content, trimmed, user_text)
+        # content = _post_local_llm(system_content, trimmed, user_text)
+        content = _post_local_llm(system_content, [], user_text)
+
     else:
         content = _post_gemini(system_content, trimmed, user_text)
 
@@ -244,7 +246,8 @@ def finalize_response(user_text, context, active_mode, vision_result):
     if active_mode == 5:
         content = _post_gemini(system_content, trimmed, user_text)
     elif active_mode == 6:
-        content = _post_local_llm(system_content, trimmed, user_text)
+        # content = _post_local_llm(system_content, trimmed, user_text)
+        content = _post_local_llm(system_content, [], user_text)
     else:
         content = _post_gemini(system_content, trimmed, user_text)
 
