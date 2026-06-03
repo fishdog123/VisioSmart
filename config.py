@@ -234,7 +234,8 @@ LLM_MODEL = "qwen-chat"
 SCENE_MODEL ="smolvlm-vision"
 LLM_TIMEOUT_SEC = 90
 LLM_MAX_TOKENS = 140
-LLM_TEMPERATURE = 0.6
+LLM_TEMPERATURE = 0.3
+LLM_INENT_TEMPERATURE = 0.0
 LLM_TOP_P = 0.8
 LLM_TOP_K = 20
 LLM_MAX_CONTEXT_CHARS = 1800
@@ -253,6 +254,7 @@ def append_llm_context(role, text):
     if not text:
         return
     with _llm_context_lock:
+        print(f"[LLM Context] Appending ({role}): {text}")
         _llm_context.append({"role": role, "content": text.strip()})
 
 def get_llm_context():

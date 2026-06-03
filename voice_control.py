@@ -145,6 +145,7 @@ def _handle_chat_text(text):
 
         try:
             vision_result = response_queue.get(timeout=3)
+            print(f"[LLM] Received vision result for one-shot: {vision_result}")
         except queue.Empty:
             tts_queue.put("Sorry, I could not get a result from the camera.")
             return True

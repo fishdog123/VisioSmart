@@ -9,6 +9,7 @@ from config import (
     LLM_MODEL,
     LLM_TIMEOUT_SEC,
     LLM_MAX_TOKENS,
+    LLM_INENT_TEMPERATURE,
     LLM_TEMPERATURE,
     LLM_TOP_P,
     LLM_TOP_K,
@@ -20,6 +21,7 @@ from config import (
 # ==========================================
 # LLM Client (Gemini & Local VLM/LLM)
 # ==========================================
+# 1. System instruction only (No examples inside!)
 SYSTEM_PROMPT = (
     "You are a fast smart glasses assistant for blind users.\n"
     "Rule: You must ONLY output a valid JSON object based on the user request.\n\n"
@@ -27,19 +29,26 @@ SYSTEM_PROMPT = (
     '1. If you can answer directly: {"action":"respond","text":"Your answer"}\n'
     '2. If you need a camera tool: {"action":"run_mode_once","mode":1|2|3|4,"reason":"Why"}\n\n'
     "Mode Map: 1=Currency, 2=Face, 3=OCR, 4=Object\n\n"
-    "Examples:\n"
-    'User: who is here\n'
-    'Assistant: {"action":"run_mode_once","mode":2,"reason":"Identify people"}\n'
-    'User: read this\n'
-    'Assistant: {"action":"run_mode_once","mode":3,"reason":"Read text"}\n'
-    'User: how much money is this\n'
-    'Assistant: {"action":"run_mode_once","mode":1,"reason":"Check currency"}\n'
-    'User: hello\n'
-    'Assistant: {"action":"respond","text":"Hello! How can I help you?"}\n'
-    'User: how much when is he\n'
-    'Assistant: {"action":"respond","text":"I did not catch that. Please ask about a person, text, or object."}\n\n'
     "Respond in exactly 1 sentence. No conversational filler."
 )
+
+# 2. Structured Few-Shot Examples
+ROUTER_EXAMPLES = [
+    {"role": "user", "content": "who is here"},
+    {"role": "assistant", "content": '{"action":"run_mode_once","mode":2,"reason":"Identify people"}'},
+
+    {"role": "user", "content": "read this"},
+    {"role": "assistant", "content": '{"action":"run_mode_once","mode":3,"reason":"Read text"}'},
+
+    {"role": "user", "content": "how much money is this"},
+    {"role": "assistant", "content": '{"action":"run_mode_once","mode":1,"reason":"Check currency"}'},
+
+    {"role": "user", "content": "hello"},
+    {"role": "assistant", "content": '{"action":"respond","text":"Hello! How can I help you?"}'},
+
+    {"role": "user", "content": "how much when is he"},
+    {"role": "assistant", "content": '{"action":"respond","text":"I did not catch that. Please ask about a person, text, or object."}'}
+]
 
 FINALIZE_PROMPT = (
     "You are an intelligent smart glasses assistant for blind users.\n"
@@ -50,32 +59,34 @@ FINALIZE_PROMPT = (
 )
 
 
-def _post_local_llm(system_content, context, user_text):
+def _post_local_llm(system_content, context, user_text, examples=None):
     """
     Accepts standardized signature parameters and maps them
     to an OpenAI-compatible Messages array for local endpoints.
     """
     messages = [{"role": "system", "content": system_content}]
+    if examples:
+        messages.extend(examples)
 
     for item in context or []:
         role = item.get("role")
         text = item.get("content", "")
         if text:
             # Match standard API key roles (user / assistant)
-            messages.append({
-                "role": "user" if role == "user" else "assistant",
-                "content": text
-            })
+            if role in {"user", "assistant", "system"}:
+                messages.append({"role": role, "content": text})
 
     messages.append({"role": "user", "content": user_text})
 
     payload = {
         "model": LLM_MODEL,
         "messages": messages,
-        "temperature": LLM_TEMPERATURE,
+        "temperature": LLM_INENT_TEMPERATURE,
         "top_p": LLM_TOP_P,
         "top_k": LLM_TOP_K,
+        "response_format": {"type": "json_object"}
     }
+    print(f"[LOCAL LLM] Sending request: {messages}")
 
     try:
         response = requests.post(LLM_URL, json=payload, timeout=LLM_TIMEOUT_SEC)
@@ -91,11 +102,18 @@ def _post_local_llm(system_content, context, user_text):
     return content
 
 
-def _post_gemini(system_content, context, user_text):
+def _post_gemini(system_content, context, user_text, examples=None):
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not set")
 
     contents = []
+
+    if examples:
+        for ex in examples:
+            contents.append({
+                "role": "user" if ex["role"] == "user" else "model",
+                "parts": [{"text": ex["content"]}],
+            })
     for item in context or []:
         role = item.get("role")
         text = item.get("content", "")
@@ -124,6 +142,7 @@ def _post_gemini(system_content, context, user_text):
             "responseMimeType": "application/json",
         },
     }
+    print(f"[GEMINI] Sending request with content: {contents}")
 
     url = f"{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent"
     try:
@@ -174,7 +193,12 @@ def _parse_action(content):
     try:
         data = json.loads(raw)
     except Exception:
-        return {"action": "respond", "text": "Sorry, I did not understand that."}
+        try:
+            print(f"[LLM] Failed to parse JSON, trying raw content: {raw}")
+            data = json.loads(raw)
+        except Exception:
+            print(f"[LLM] Failed to parse JSON from raw content: {raw}")
+            return {"action": "respond", "text": "Sorry, I did not understand that."}
 
     action = data.get("action")
     if action == "run_mode_once":
@@ -218,27 +242,23 @@ def _trim_context(context, system_content, user_text):
 
 def chat_once(user_text, context, active_mode):
     system_parts = [SYSTEM_PROMPT]
-    if active_mode:
-        system_parts.append(f"Current active mode: {MODE_NAMES.get(active_mode, 'None')}.")
     system_content = " ".join(system_parts)
     trimmed = _trim_context(context, system_content, user_text)
 
     if active_mode == 5:
-        content = _post_gemini(system_content, trimmed, user_text)
+        content = _post_gemini(system_content, trimmed, user_text, examples=ROUTER_EXAMPLES)
     elif active_mode == 6:
-        # content = _post_local_llm(system_content, trimmed, user_text)
-        content = _post_local_llm(system_content, [], user_text)
+        content = _post_local_llm(system_content, trimmed, user_text, examples=ROUTER_EXAMPLES)
+        # content = _post_local_llm(system_content, [], user_text)
 
     else:
-        content = _post_gemini(system_content, trimmed, user_text)
+        content = _post_gemini(system_content, trimmed, user_text, examples=ROUTER_EXAMPLES)
 
     return _parse_action(content)
 
 
 def finalize_response(user_text, context, active_mode, vision_result):
     system_parts = [FINALIZE_PROMPT]
-    if active_mode:
-        system_parts.append(f"Current active mode: {MODE_NAMES.get(active_mode, 'None')}.")
     system_parts.append(f"Vision result: {vision_result}")
     system_content = " ".join(system_parts)
     trimmed = _trim_context(context, system_content, user_text)
@@ -246,8 +266,8 @@ def finalize_response(user_text, context, active_mode, vision_result):
     if active_mode == 5:
         content = _post_gemini(system_content, trimmed, user_text)
     elif active_mode == 6:
-        # content = _post_local_llm(system_content, trimmed, user_text)
-        content = _post_local_llm(system_content, [], user_text)
+        content = _post_local_llm(system_content, trimmed, user_text)
+        # content = _post_local_llm(system_content, [], user_text)
     else:
         content = _post_gemini(system_content, trimmed, user_text)
 

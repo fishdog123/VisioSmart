@@ -72,7 +72,7 @@ def tts_worker():
             break
 
         last_spoken_text[0] = text
-        append_llm_context("assistant", text)
+        # append_llm_context("assistant", text)
 
         speak(text)
         tts_queue.task_done()
