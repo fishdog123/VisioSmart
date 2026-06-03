@@ -5,8 +5,19 @@ import signal
 import time
 import threading
 import queue
-
+import sensors
 import config
+from flask import Flask, Response, jsonify
+from config import (
+    current_mode, mode_lock, tts_queue, active_mode_ref,
+    MODE_NAMES, RESOLUTION, OCR_RESOLUTION, TTS_SHUTDOWN,
+    THERMAL_ZONE_PATH, THERMAL_WARNING_THRESHOLD, THERMAL_CHECK_INTERVAL,
+    STREAM_HOST, STREAM_PORT,
+    llm_one_shot_queue, LOCAL_LLM_CHAT_MODE,GEMINI_CHAT_MODE, sensor_state_lock, latest_sensor_state
+)
+from camera import get_frame, release_camera, reconfigure_camera
+from voice_control import start_voice_listener
+from modes import CurrencyDetector, FaceRecognizer, GeminiSceneDescriber, LocalSceneDescriber, OCRProcessor, ObjectDetector, ColorRecognition, LightRecognition
 
 parser = argparse.ArgumentParser(description="Smart glasses CV service")
 parser.add_argument("--headless", action="store_true",
@@ -14,20 +25,6 @@ parser.add_argument("--headless", action="store_true",
 args, _ = parser.parse_known_args()
 if args.headless:
     config.set_headless_mode(True)
-
-from flask import Flask, Response
-from config import (
-    current_mode, mode_lock, tts_queue, active_mode_ref,
-    MODE_NAMES, RESOLUTION, OCR_RESOLUTION, TTS_SHUTDOWN,
-    THERMAL_ZONE_PATH, THERMAL_WARNING_THRESHOLD, THERMAL_CHECK_INTERVAL,
-    STREAM_HOST, STREAM_PORT,
-    llm_one_shot_queue, LOCAL_LLM_CHAT_MODE,GEMINI_CHAT_MODE
-)
-import tts  # noqa: F401 — starts TTS worker thread on import
-from camera import get_frame, release_camera, reconfigure_camera
-from voice_control import start_voice_listener
-from modes import CurrencyDetector, FaceRecognizer, GeminiSceneDescriber, LocalSceneDescriber, OCRProcessor, ObjectDetector, ColorRecognition, LightRecognition
-
 
 
 # ==========================================
@@ -113,6 +110,12 @@ def viewer():
     </html>
     """
 
+@app.route("/metrics")
+@app.route("/sensors")
+def sensor_metrics():
+    """Exposes all real-time structural sensor payloads directly on the primary CV stream port."""
+    with sensor_state_lock:
+        return jsonify(latest_sensor_state)
 
 @app.route("/health")
 def health():
@@ -173,22 +176,53 @@ def _thermal_monitor():
 # MAIN LOOP
 # ==========================================
 def main():
-    # SIGTERM handler for clean systemd service shutdown
+# SIGTERM handler for clean systemd service shutdown
     def _signal_handler(sig, frame):
         with mode_lock:
             current_mode[0] = 0
     signal.signal(signal.SIGTERM, _signal_handler)
 
     active_mode = None
+
+    # 1. Start the Unified Flask Server
     threading.Thread(target=lambda: app.run(host=STREAM_HOST, port=STREAM_PORT, threaded=True, use_reloader=False), daemon=True).start()
-    print(f"[INFO] CV stream server running at http://{STREAM_HOST}:{STREAM_PORT}")
+    print(f"[INFO] Unified server running at http://{STREAM_HOST}:{STREAM_PORT}")
+
+    # 2. Fire up Voice Control Assistant
     start_voice_listener()
     preload_all()
     threading.Thread(target=_thermal_monitor, daemon=True).start()
+
+    # =========================================================
+    # 🔥 NEW: UNIFIED BACKGROUND HARDWARE TELEMETRY SUBSYSTEMS
+    # =========================================================
+    print("[INFO] Initializing hardware peripheral components...")
+    sensors.init_firebase()
+
+    # Start Bio-metric I2C interface safely
+    try:
+        sensors.heart_service.start()
+        with sensor_state_lock:
+            latest_sensor_state["system"]["heart_available"] = True
+        threading.Thread(target=sensors.heart_uploader, daemon=True).start()
+        print("[INFO] ✓ MAX30102 Heart Rate Engine Active.")
+    except Exception as e:
+        with sensor_state_lock:
+            latest_sensor_state["system"]["heart_available"] = False
+        print(f"[ERROR] Heart Rate hardware missing or blocked: {e}")
+
+    # Kick off background asynchronous telemetry loops
+    threading.Thread(target=sensors.gps_loop, daemon=True).start()
+    threading.Thread(target=sensors.obstacle_loop, daemon=True).start()
+    threading.Thread(target=sensors.system_uploader, daemon=True).start()
+    print("[INFO] ✓ GPS, Ultrasonic, and Firebase state machines online.")
     tts_queue.put("Smart glasses starting. Loading models, please wait. Say help for all commands.")
 
     try:
         while True:
+            with sensor_state_lock:
+                latest_sensor_state["system"]["camera_running"] = (active_mode is not None)
+                latest_sensor_state["system"]["camera_available"] = True
             _handle_one_shot_requests()
 
             with mode_lock:
@@ -274,6 +308,12 @@ def main():
     finally:
         print("[INFO] Shutting down...")
         release_camera()
+        try:
+            import RPi.GPIO as GPIO
+            GPIO.cleanup()
+            print("[INFO] ✓ GPIO Pins cleaned up safely.")
+        except Exception:
+            pass
         if not config.HEADLESS_MODE:
             cv2.destroyAllWindows()
         tts_queue.put(TTS_SHUTDOWN)
