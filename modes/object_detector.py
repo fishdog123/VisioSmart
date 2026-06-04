@@ -49,7 +49,7 @@ class ObjectDetector:
         self.frame_rate_buffer = deque(maxlen=50)
         self.avg_frame_rate = 0
         self.last_spoken_time = 0
-        self.cooldown = 5
+        self.cooldown = 10
         self.last_detect_time = time.time()
         self.last_no_detect_time = 0
         print("[INFO] Object detector ready.")
