@@ -220,32 +220,12 @@ def _parse_action(content):
     return {"action": "respond", "text": "Sorry, I did not understand that."}
 
 
-def _trim_context(context, system_content, user_text):
-    if not context:
-        return []
-
-    base_len = len(system_content) + len(user_text)
-    if base_len >= LLM_MAX_CONTEXT_CHARS:
-        return []
-
-    budget = LLM_MAX_CONTEXT_CHARS - base_len
-    trimmed = []
-    running = 0
-    for item in reversed(context):
-        content = item.get("content", "")
-        if not content:
-            continue
-        item_len = len(content) + 10
-        if running + item_len > budget:
-            break
-        trimmed.append(item)
-        running += item_len
-
-    return list(reversed(trimmed))
+def _trim_context(context, max_context=4):
+    return context[-max_context:] if len(context) > max_context else context
 
 
 def chat_once(user_text, context, active_mode):
-    trimmed = _trim_context(context, SYSTEM_PROMPT, user_text)
+    trimmed = _trim_context(context, max_context=2)
     if active_mode == 5:
         content = _post_gemini(SYSTEM_PROMPT, trimmed, user_text, examples=ROUTER_EXAMPLES, temperature=LLM_INENT_TEMPERATURE)
     elif active_mode == 6:
@@ -262,7 +242,7 @@ def finalize_response(user_text, context, active_mode, vision_result):
         f"Vision Tool Environmental Data: {vision_result}\n"
         f"User Original Query: {user_text}"
     )
-    trimmed = _trim_context(context, FINALIZE_PROMPT, user_payload)
+    trimmed = _trim_context(context, max_context=4)
 
     if active_mode == 5:
         content = _post_gemini(FINALIZE_PROMPT, trimmed, user_payload, examples=None, temperature=LLM_TEMPERATURE)
