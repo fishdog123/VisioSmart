@@ -7,15 +7,17 @@ from collections import deque
 from datetime import datetime, timezone
 import RPi.GPIO as GPIO
 from smbus2 import SMBus
-
 import firebase_admin
-from firebase_admin import credentials, db
+from firebase_admin import credentials, db, firestore
+from image_capture import create_folder
+import requests
+from create_face_embedding import main as create_face_embedding_main
 
 from config import (
     FIREBASE_DB_URL, FIREBASE_KEY_PATH, DEVICE_ID,
     GPS_SERIAL_PORT, GPS_BAUD_RATE, TRIG_PIN, ECHO_PIN, BUZZER_PIN,
     OBSTACLE_THRESHOLD_CM, I2C_BUS, MAX30102_ADDR,
-    latest_sensor_state, sensor_state_lock
+    latest_sensor_state, sensor_state_lock, BASE_DIR
 )
 
 # =========================================================
@@ -25,6 +27,31 @@ def init_firebase():
     if not firebase_admin._apps:
         cred = credentials.Certificate(FIREBASE_KEY_PATH)
         firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_DB_URL})
+
+    db = firestore.client()
+    people_ref = (
+        db.collection("persons")
+        .document("gp6meBa7X3XS6vYAlmzId39eJVH2")
+        .collection("people")
+    )
+
+    known_people = {}
+    for doc in people_ref.stream():
+        data = doc.to_dict()
+        known_people[data.get("name", "Unknown")] =  data.get("photoUrls", [])
+        for name, urls in known_people.items():
+            for url in urls:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    create_folder(BASE_DIR / "face_detection" / "dataset" / name)
+                    filename = url.split("/")[-1].split("?")[0]
+                    filepath = BASE_DIR / "face_detection" / "dataset" / name / filename
+                    with open(filepath, "wb") as f:
+                        f.write(response.content)
+                    print(f"Downloaded {name}'s photo: {filepath}")
+    create_face_embedding_main()
+
+
     with sensor_state_lock:
         latest_sensor_state["system"]["firebase_ok"] = True
 
