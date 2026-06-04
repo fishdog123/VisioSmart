@@ -19,6 +19,7 @@ from config import (
     OBSTACLE_THRESHOLD_CM, I2C_BUS, MAX30102_ADDR,
     latest_sensor_state, sensor_state_lock, BASE_DIR
 )
+import cv2
 
 # =========================================================
 # INITIALIZATION & FIREBASE REFERENCING
@@ -39,16 +40,18 @@ def init_firebase():
     for doc in people_ref.stream():
         data = doc.to_dict()
         known_people[data.get("name", "Unknown")] =  data.get("photoUrls", [])
-        for name, urls in known_people.items():
-            for url in urls:
-                response = requests.get(url)
-                if response.status_code == 200:
-                    create_folder(BASE_DIR / "face_detection" / "dataset" / name)
-                    filename = url.split("/")[-1].split("?")[0]
-                    filepath = BASE_DIR / "face_detection" / "dataset" / name / filename
-                    with open(filepath, "wb") as f:
-                        f.write(response.content)
-                    print(f"Downloaded {name}'s photo: {filepath}")
+
+    for name, urls in known_people.items():
+        for url in urls:
+            response = requests.get(url)
+            if response.status_code == 200:
+                image_bytes = np.asarray(bytearray(response.content), dtype=np.uint8)
+                img_bgr = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
+                create_folder(BASE_DIR / "face_detection" / "dataset" / name)
+                filename = url.split("/")[-1].split("?")[0]
+                filepath = BASE_DIR / "face_detection" / "dataset" / name / filename
+                cv2.imwrite(str(filepath), img_bgr)
+                print(f"Downloaded {name}'s photo: {filepath}")
     create_face_embedding_main()
 
 
