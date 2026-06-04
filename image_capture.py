@@ -9,10 +9,6 @@ import cv2
 
 
 
-cam = Picamera2()
-config = cam.create_video_configuration(main={"format": "BGR888","size": RESOLUTION}, buffer_count=2)
-cam.configure(config)
-cam.start()
 
 def create_folder(name):
     base_path = BASE_DIR / "face_detection" / "dataset" / name
@@ -47,5 +43,9 @@ def capture_photos(name):
     print(f"Photo capture completed. {photo_count} photos saved for {name}.")
 
 if __name__ == "__main__":
+    cam = Picamera2()
+    config = cam.create_video_configuration(main={"format": "BGR888","size": RESOLUTION}, buffer_count=2)
+    cam.configure(config)
+    cam.start()
     PERSON_NAME = input("Enter the name of the person to capture photos for: ").strip()
     capture_photos(PERSON_NAME)
