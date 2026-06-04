@@ -46,7 +46,13 @@ ROUTER_EXAMPLES = [
     {"role": "assistant", "content": '{"action":"respond","text":"Hello! How can I help you?"}'},
 
     {"role": "user", "content": "how much when is he"},
-    {"role": "assistant", "content": '{"action":"respond","text":"I did not catch that. Please ask about a person, text, or object."}'}
+    {"role": "assistant", "content": '{"action":"respond","text":"I did not catch that. Please ask about a person, text, or object."}'},
+
+    {"role": "user", "content": "what can you see"},
+    {"role": "assistant", "content": '{"action":"run_mode_once","mode":4,"reason":"Describe surroundings"}'},
+
+    {"role": "user", "content": "any money"},
+    {"role": "assistant", "content": '{"action":"run_mode_once","mode":1,"reason":"Check for currency"}'},
 ]
 
 FINALIZE_PROMPT = (
