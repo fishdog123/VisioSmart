@@ -349,7 +349,7 @@ class FaceRecognizer:
         """Run a one-shot face recognition and return a concise text summary."""
         faces = self.app.get(frame)
         if not faces:
-            return "No person detected."
+            return (0, "No faces detected.")
 
         frame_width = frame.shape[1]
         named = []  # list of (name, position, emotion_label_or_None)
@@ -407,5 +407,5 @@ class FaceRecognizer:
                     parts.append(f"{len(unknown_positions)} unknown people")
 
         if parts:
-            return "I see " + " and ".join(parts)
-        return "No person detected."
+            return (1, "Detected faces: " + "; ".join(parts))
+        return (0, "No faces detected.")

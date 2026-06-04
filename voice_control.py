@@ -130,8 +130,10 @@ def _handle_chat_text(text):
         return True
 
     if action.get("action") == "respond":
+        response_text = action.get("text", "")
         append_llm_context("user", text)
-        tts_queue.put(action.get("text", ""))
+        append_llm_context("assistant", response_text)
+        tts_queue.put(response_text)
         return True
 
     if action.get("action") == "run_mode_once":
@@ -172,15 +174,16 @@ def _handle_chat_text(text):
             return True
 
         if final_action.get("action") == "respond":
+            final_speech = final_action.get("text", "")
             append_llm_context("user", text)
-            tts_queue.put(final_action.get("text", ""))
+            append_llm_context("assistant", final_speech)
+            tts_queue.put(final_speech)
         else:
             tts_queue.put("I could not answer that.")
         return True
 
     tts_queue.put("I could not answer that.")
     return True
-
 
 def start_voice_listener():
     vosk.SetLogLevel(-1)

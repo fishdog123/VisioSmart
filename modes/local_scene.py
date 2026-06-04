@@ -85,7 +85,7 @@ class LocalSceneDescriber:
 
     def summarize(self, frame):
         """Synchronous helper function matching Gemini describer design."""
-        return self._describe_frame(frame)
+        return (1, self._describe_frame(frame))
 
     def _describe_frame(self, frame):
         """Handles file serialization, base64 compilation, and local VLM routing."""

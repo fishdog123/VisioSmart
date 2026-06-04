@@ -240,7 +240,7 @@ LLM_TOP_P = 0.8
 LLM_TOP_K = 20
 LLM_MAX_CONTEXT_CHARS = 1800
 
-
+FRAMES_TO_CAPTURE = 5  # Number of frames to capture for better detection in chat modes
 
 LLM_CONTEXT_MAX = 14  # short rolling memory for speed
 _llm_context_lock = threading.Lock()

@@ -14,6 +14,7 @@ from config import (
     THERMAL_ZONE_PATH, THERMAL_WARNING_THRESHOLD, THERMAL_CHECK_INTERVAL,
     STREAM_HOST, STREAM_PORT,
     llm_one_shot_queue, LOCAL_LLM_CHAT_MODE,GEMINI_CHAT_MODE, sensor_state_lock, latest_sensor_state
+    ,FRAMES_TO_CAPTURE
 )
 from camera import get_frame, release_camera, reconfigure_camera
 from voice_control import start_voice_listener
@@ -336,8 +337,14 @@ def _handle_one_shot_requests():
             pass
         return
 
-    frame = get_frame()
-    if frame is None:
+    frames = []
+    for _ in range(FRAMES_TO_CAPTURE):  # Capture a few frames to increase chance of a good one
+        frame = get_frame()
+        if frame is not None:
+            frames.append(frame)
+        time.sleep(0.1)
+
+    if frames == []:
         try:
             response_queue.put("Camera not available.")
         except Exception:
@@ -345,7 +352,22 @@ def _handle_one_shot_requests():
         return
 
     try:
-        summary = processors[mode_num].summarize(frame)
+        final_text = None
+        middle_idx = len(frames) // 2
+        middle_text = None
+
+        for i, frame in enumerate(frames):
+            status, text = processors[mode_num].summarize(frame)
+
+            if i == middle_idx:
+                middle_text = text
+
+            if status == 1:
+                final_text = text
+                break
+
+        summary = final_text if final_text else middle_text
+
     except Exception as e:
         print(f"[ERROR] One-shot mode {mode_num} failed: {e}")
         summary = "Error running detection."

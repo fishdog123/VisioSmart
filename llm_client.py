@@ -29,7 +29,6 @@ SYSTEM_PROMPT = (
     '1. If you can answer directly: {"action":"respond","text":"Your answer"}\n'
     '2. If you need a camera tool: {"action":"run_mode_once","mode":1|2|3|4,"reason":"Why"}\n\n'
     "Mode Map: 1=Currency, 2=Face, 3=OCR, 4=Object\n\n"
-    "Respond in exactly 1 sentence. No conversational filler."
 )
 
 # 2. Structured Few-Shot Examples
@@ -59,7 +58,7 @@ FINALIZE_PROMPT = (
 )
 
 
-def _post_local_llm(system_content, context, user_text, examples=None):
+def _post_local_llm(system_content, context, user_text, examples=None, temperature=0.0):
     """
     Accepts standardized signature parameters and maps them
     to an OpenAI-compatible Messages array for local endpoints.
@@ -72,7 +71,6 @@ def _post_local_llm(system_content, context, user_text, examples=None):
         role = item.get("role")
         text = item.get("content", "")
         if text:
-            # Match standard API key roles (user / assistant)
             if role in {"user", "assistant", "system"}:
                 messages.append({"role": role, "content": text})
 
@@ -81,7 +79,7 @@ def _post_local_llm(system_content, context, user_text, examples=None):
     payload = {
         "model": LLM_MODEL,
         "messages": messages,
-        "temperature": LLM_INENT_TEMPERATURE,
+        "temperature": temperature,
         "top_p": LLM_TOP_P,
         "top_k": LLM_TOP_K,
         "response_format": {"type": "json_object"}
@@ -102,7 +100,7 @@ def _post_local_llm(system_content, context, user_text, examples=None):
     return content
 
 
-def _post_gemini(system_content, context, user_text, examples=None):
+def _post_gemini(system_content, context, user_text, examples=None, temperature=0.0):
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not set")
 
@@ -136,7 +134,7 @@ def _post_gemini(system_content, context, user_text, examples=None):
         },
         "contents": contents,
         "generationConfig": {
-            "temperature": LLM_TEMPERATURE,
+            "temperature": temperature,
             "topP": LLM_TOP_P,
             "topK": LLM_TOP_K,
             "responseMimeType": "application/json",
@@ -241,34 +239,30 @@ def _trim_context(context, system_content, user_text):
 
 
 def chat_once(user_text, context, active_mode):
-    system_parts = [SYSTEM_PROMPT]
-    system_content = " ".join(system_parts)
-    trimmed = _trim_context(context, system_content, user_text)
-
+    trimmed = _trim_context(context, SYSTEM_PROMPT, user_text)
     if active_mode == 5:
-        content = _post_gemini(system_content, trimmed, user_text, examples=ROUTER_EXAMPLES)
+        content = _post_gemini(SYSTEM_PROMPT, trimmed, user_text, examples=ROUTER_EXAMPLES, temperature=LLM_INENT_TEMPERATURE)
     elif active_mode == 6:
-        content = _post_local_llm(system_content, trimmed, user_text, examples=ROUTER_EXAMPLES)
-        # content = _post_local_llm(system_content, [], user_text)
-
+        content = _post_local_llm(SYSTEM_PROMPT, trimmed, user_text, examples=ROUTER_EXAMPLES, temperature=LLM_INENT_TEMPERATURE)
     else:
-        content = _post_gemini(system_content, trimmed, user_text, examples=ROUTER_EXAMPLES)
+        content = _post_gemini(SYSTEM_PROMPT, trimmed, user_text, examples=ROUTER_EXAMPLES, temperature=LLM_INENT_TEMPERATURE)
 
     return _parse_action(content)
 
 
 def finalize_response(user_text, context, active_mode, vision_result):
-    system_parts = [FINALIZE_PROMPT]
-    system_parts.append(f"Vision result: {vision_result}")
-    system_content = " ".join(system_parts)
-    trimmed = _trim_context(context, system_content, user_text)
+
+    user_payload = (
+        f"Vision Tool Environmental Data: {vision_result}\n"
+        f"User Original Query: {user_text}"
+    )
+    trimmed = _trim_context(context, FINALIZE_PROMPT, user_payload)
 
     if active_mode == 5:
-        content = _post_gemini(system_content, trimmed, user_text)
+        content = _post_gemini(FINALIZE_PROMPT, trimmed, user_payload, examples=None, temperature=LLM_TEMPERATURE)
     elif active_mode == 6:
-        content = _post_local_llm(system_content, trimmed, user_text)
-        # content = _post_local_llm(system_content, [], user_text)
+        content = _post_local_llm(FINALIZE_PROMPT, trimmed, user_payload, examples=None, temperature=LLM_TEMPERATURE)
     else:
-        content = _post_gemini(system_content, trimmed, user_text)
+        content = _post_gemini(FINALIZE_PROMPT, trimmed, user_payload, examples=None, temperature=LLM_TEMPERATURE)
 
     return _parse_action(content)

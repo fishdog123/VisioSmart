@@ -126,8 +126,8 @@ class OCRProcessor:
                     raw_results.append((pts, text))
 
         if not raw_results:
-            return "No text detected."
+            return (0, "No text detected.")
 
         raw_results = self._sort_by_position(raw_results)
-        combined = ". ".join([text for _, text in raw_results])
-        return combined
+        combined = " ".join([text for _, text in raw_results])
+        return (1, f'Read text: "{combined}"')

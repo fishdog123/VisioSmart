@@ -68,7 +68,7 @@ class GeminiSceneDescriber:
             self.completed = True
 
     def summarize(self, frame):
-        return self._describe_frame(frame)
+        return (1, self._describe_frame(frame))
 
     def _describe_frame(self, frame):
         try:
