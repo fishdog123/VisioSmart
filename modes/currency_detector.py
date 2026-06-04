@@ -94,7 +94,7 @@ class CurrencyDetector:
                 counts[classname] = counts.get(classname, 0) + 1
 
         if not counts:
-            return "No currency detected."
+            return (0, "No currency detected.")
 
-        speech = [f"{cnt} {name}" for name, cnt in counts.items()]
-        return "I see " + " and ".join(speech) + f". Total is {total_money} Pounds."
+        speech = [f"{cnt}x {name}" for name, cnt in counts.items()]
+        return (1, "Currency detected: " + ", ".join(speech) + f". Total value: {total_money} Pounds.")

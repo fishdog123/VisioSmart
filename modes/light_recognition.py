@@ -74,8 +74,8 @@ class LightRecognition:
         avg = self._avg_brightness(frame)
         label = self._label_for_brightness(avg)
         if avg is None:
-            return "Lighting: unknown"
-        return f"Lighting: {label} ({int(avg)})"
+            return (0, "Lighting: unknown")
+        return (1, f"Lighting: {label} ({int(avg)})")
 
     def reset(self):
         self.last_label = None

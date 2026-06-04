@@ -5,8 +5,20 @@ import signal
 import time
 import threading
 import queue
-
+import sensors
 import config
+from flask import Flask, Response, jsonify
+from config import (
+    current_mode, mode_lock, tts_queue, active_mode_ref,
+    MODE_NAMES, RESOLUTION, OCR_RESOLUTION, TTS_SHUTDOWN,
+    THERMAL_ZONE_PATH, THERMAL_WARNING_THRESHOLD, THERMAL_CHECK_INTERVAL,
+    STREAM_HOST, STREAM_PORT,
+    llm_one_shot_queue, LOCAL_LLM_CHAT_MODE,GEMINI_CHAT_MODE, sensor_state_lock, latest_sensor_state
+    ,FRAMES_TO_CAPTURE
+)
+from camera import get_frame, release_camera, reconfigure_camera
+from voice_control import start_voice_listener
+from modes import CurrencyDetector, FaceRecognizer, GeminiSceneDescriber, LocalSceneDescriber, OCRProcessor, ObjectDetector, ColorRecognition, LightRecognition
 
 parser = argparse.ArgumentParser(description="Smart glasses CV service")
 parser.add_argument("--headless", action="store_true",
@@ -14,20 +26,6 @@ parser.add_argument("--headless", action="store_true",
 args, _ = parser.parse_known_args()
 if args.headless:
     config.set_headless_mode(True)
-
-from flask import Flask, Response
-from config import (
-    current_mode, mode_lock, tts_queue, active_mode_ref,
-    MODE_NAMES, RESOLUTION, OCR_RESOLUTION, TTS_SHUTDOWN,
-    THERMAL_ZONE_PATH, THERMAL_WARNING_THRESHOLD, THERMAL_CHECK_INTERVAL,
-    STREAM_HOST, STREAM_PORT,
-    llm_one_shot_queue, CHAT_MODE,
-)
-import tts  # noqa: F401 — starts TTS worker thread on import
-from camera import get_frame, release_camera, reconfigure_camera
-from voice_control import start_voice_listener
-from modes import CurrencyDetector, FaceRecognizer, GeminiSceneDescriber, OCRProcessor, ObjectDetector, ColorRecognition, LightRecognition
-
 
 
 # ==========================================
@@ -113,6 +111,12 @@ def viewer():
     </html>
     """
 
+@app.route("/metrics")
+@app.route("/sensors")
+def sensor_metrics():
+    """Exposes all real-time structural sensor payloads directly on the primary CV stream port."""
+    with sensor_state_lock:
+        return jsonify(latest_sensor_state)
 
 @app.route("/health")
 def health():
@@ -132,9 +136,10 @@ def preload_all():
             (2, "Face Recognition", FaceRecognizer),
             (3, "OCR/Text Reading", OCRProcessor),
             (4, "Object Detection", ObjectDetector),
-            (6, "Scene Description", GeminiSceneDescriber),
-            (7, "Color Recognition", ColorRecognition),
-            (8, "Light Recognition", LightRecognition),
+            (7, "Gemini Scene Description", GeminiSceneDescriber),
+            (8, "Local LLM Scene Description", LocalSceneDescriber),
+            (9, "Color Recognition", ColorRecognition),
+            (10, "Light Recognition", LightRecognition),
         ]
 
         for mode_num, name, cls in loaders:
@@ -172,22 +177,53 @@ def _thermal_monitor():
 # MAIN LOOP
 # ==========================================
 def main():
-    # SIGTERM handler for clean systemd service shutdown
+# SIGTERM handler for clean systemd service shutdown
     def _signal_handler(sig, frame):
         with mode_lock:
             current_mode[0] = 0
     signal.signal(signal.SIGTERM, _signal_handler)
 
     active_mode = None
+
+    # 1. Start the Unified Flask Server
     threading.Thread(target=lambda: app.run(host=STREAM_HOST, port=STREAM_PORT, threaded=True, use_reloader=False), daemon=True).start()
-    print(f"[INFO] CV stream server running at http://{STREAM_HOST}:{STREAM_PORT}")
+    print(f"[INFO] Unified server running at http://{STREAM_HOST}:{STREAM_PORT}")
+
+    # 2. Fire up Voice Control Assistant
     start_voice_listener()
     preload_all()
     threading.Thread(target=_thermal_monitor, daemon=True).start()
+
+    # =========================================================
+    # 🔥 NEW: UNIFIED BACKGROUND HARDWARE TELEMETRY SUBSYSTEMS
+    # =========================================================
+    print("[INFO] Initializing hardware peripheral components...")
+    sensors.init_firebase()
+
+    # Start Bio-metric I2C interface safely
+    try:
+        sensors.heart_service.start()
+        with sensor_state_lock:
+            latest_sensor_state["system"]["heart_available"] = True
+        threading.Thread(target=sensors.heart_uploader, daemon=True).start()
+        print("[INFO] ✓ MAX30102 Heart Rate Engine Active.")
+    except Exception as e:
+        with sensor_state_lock:
+            latest_sensor_state["system"]["heart_available"] = False
+        print(f"[ERROR] Heart Rate hardware missing or blocked: {e}")
+
+    # Kick off background asynchronous telemetry loops
+    threading.Thread(target=sensors.gps_loop, daemon=True).start()
+    threading.Thread(target=sensors.obstacle_loop, daemon=True).start()
+    threading.Thread(target=sensors.system_uploader, daemon=True).start()
+    print("[INFO] ✓ GPS, Ultrasonic, and Firebase state machines online.")
     tts_queue.put("Smart glasses starting. Loading models, please wait. Say help for all commands.")
 
     try:
         while True:
+            with sensor_state_lock:
+                latest_sensor_state["system"]["camera_running"] = (active_mode is not None)
+                latest_sensor_state["system"]["camera_available"] = True
             _handle_one_shot_requests()
 
             with mode_lock:
@@ -200,7 +236,7 @@ def main():
             if new_mode is not None and new_mode != active_mode:
                 if new_mode in failed_modes:
                     tts_queue.put(f"{MODE_NAMES.get(new_mode, 'Mode')} failed to load and is unavailable.")
-                elif new_mode == CHAT_MODE:
+                elif new_mode == GEMINI_CHAT_MODE or new_mode == LOCAL_LLM_CHAT_MODE:
                     active_mode = new_mode
                     active_mode_ref[0] = active_mode
                     tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
@@ -212,12 +248,7 @@ def main():
                     # Reset the incoming processor to allow one-shot modes to re-run cleanly
                     if new_mode in processors and hasattr(processors[new_mode], 'reset'):
                         processors[new_mode].reset()
-                    # Clear pending TTS messages from the previous mode
-                    with tts_queue.mutex:
-                        dropped = len(tts_queue.queue)
-                        tts_queue.queue.clear()
-                        tts_queue.unfinished_tasks = max(tts_queue.unfinished_tasks - dropped, 0)
-                        tts_queue.not_full.notify_all()
+
                     # Reconfigure camera for OCR (higher res) or back to default
                     target_res = OCR_RESOLUTION if new_mode == 3 else RESOLUTION
                     reconfigure_camera(target_res)
@@ -278,6 +309,12 @@ def main():
     finally:
         print("[INFO] Shutting down...")
         release_camera()
+        try:
+            import RPi.GPIO as GPIO
+            GPIO.cleanup()
+            print("[INFO] ✓ GPIO Pins cleaned up safely.")
+        except Exception:
+            pass
         if not config.HEADLESS_MODE:
             cv2.destroyAllWindows()
         tts_queue.put(TTS_SHUTDOWN)
@@ -300,8 +337,14 @@ def _handle_one_shot_requests():
             pass
         return
 
-    frame = get_frame()
-    if frame is None:
+    frames = []
+    for _ in range(FRAMES_TO_CAPTURE):  # Capture a few frames to increase chance of a good one
+        frame = get_frame()
+        if frame is not None:
+            frames.append(frame)
+        time.sleep(0.1)
+
+    if frames == []:
         try:
             response_queue.put("Camera not available.")
         except Exception:
@@ -309,7 +352,22 @@ def _handle_one_shot_requests():
         return
 
     try:
-        summary = processors[mode_num].summarize(frame)
+        final_text = None
+        middle_idx = len(frames) // 2
+        middle_text = None
+
+        for i, frame in enumerate(frames):
+            status, text = processors[mode_num].summarize(frame)
+
+            if i == middle_idx:
+                middle_text = text
+
+            if status == 1:
+                final_text = text
+                break
+
+        summary = final_text if final_text else middle_text
+
     except Exception as e:
         print(f"[ERROR] One-shot mode {mode_num} failed: {e}")
         summary = "Error running detection."

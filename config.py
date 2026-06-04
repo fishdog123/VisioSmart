@@ -3,6 +3,7 @@ import queue
 import threading
 from collections import deque
 from pathlib import Path
+import time
 
 from dotenv import load_dotenv
 
@@ -33,8 +34,8 @@ def set_headless_mode(headless: bool):
     HEADLESS_MODE = bool(headless)
 
 # CV livestream
-STREAM_HOST="0.0.0.0"
-STREAM_PORT="8081"
+STREAM_HOST = "0.0.0.0"
+STREAM_PORT = 8000
 
 # Detection
 YOLO_CONF = 0.5
@@ -70,6 +71,8 @@ tts_queue = _BoundedTTSQueue(maxsize=20)
 TTS_VOICE = "en"
 TTS_SPEED = 150
 TTS_AMPLITUDE = 160  # espeak-ng amplitude (0-200). Increase for louder output.
+MODEL_PATH = "en_US-joe-medium.onnx"
+OUTPUT_WAV = "/tmp/tts_output.wav"
 
 
 # =========================
@@ -89,15 +92,7 @@ MONEY = {
 # ==========================================
 current_mode = [None]
 mode_lock = threading.Lock()
-# VOICE_COMMANDS = {
-#     "one": 1, "won": 1,
-#     "two": 2, "to": 2, "too": 2,
-#     "three": 3, "free": 3, "tree": 3,
-#     "four": 4, "for": 4,
-#     "stop": 0, "exit": 0, "quit": 0,
-# }
 
-CHAT_MODE = 5
 # Lock used to serialize audio device access between TTS and microphone
 audio_lock = threading.RLock()
 
@@ -107,20 +102,27 @@ VOICE_COMMANDS = {
     "two": 2, "2": 2, "too": 2, "to": 2, "face": 2,
     "three": 3, "3": 3, "free": 3, "tree": 3, "ocr": 3, "text": 3,
     "four": 4, "4": 4, "for": 4, "object": 4,
-    "five": 5, "5": 5, "chat": 5, "assistant": 5,
-    "six": 6, "6": 6, "scene": 6, "describe": 6,
-    "seven": 7, "7": 7, "color": 7, "colour": 7, "colors": 7,
-    "eight": 8, "8": 8, "light": 8, "lights": 8,
+    "five": 5, "5": 5,
+    "six": 6, "6": 6,
+    "seven": 7, "7": 7,
+    "eight": 8, "8": 8,
+    "nine": 9, "9": 9, "color": 9, "colour": 9, "colors": 9,
+    "ten": 10, "10": 10, "light": 10, "lights": 10,
 }
+GEMINI_CHAT_MODE = 5
+LOCAL_LLM_CHAT_MODE = 6
+
 MODE_NAMES = {
     1: "Currency Detection",
     2: "Face Recognition",
     3: "OCR/Text Reading",
     4: "Object Detection",
-    5: "Chat Assistant",
-    6: "Scene Description",
-    7: "Color Recognition",
-    8: "Light Recognition",
+    5: "Gemini Chat Assistant",
+    6: "Local LLM Chat Assistant",
+    7: "Gemini Scene Description",
+    8: "Local LLM Scene Description",
+    9: "Color Recognition",
+    10: "Light Recognition",
 }
 
 # Special (non-mode) voice commands
@@ -156,6 +158,66 @@ PERSON_TTL = 3.5            # seconds to keep a person "active" after last seen 
 ANNOUNCE_EVERY = 15.0       # seconds between announcements of currently seen people (prevents spamming when many people are present or frequently changing)
 GREET_COOLDOWN = 30.0       # seconds before re-greeting the same person after they leave and return
 
+# Add these to the bottom of your existing config.py
+
+# =========================================================
+# SENSOR & TELEMETRY CONFIG
+# =========================================================
+FIREBASE_DB_URL = "https://visiosmart2-default-rtdb.firebaseio.com/"
+FIREBASE_KEY_PATH = "/home/pi/firebase/serviceAccountKey.json"
+DEVICE_ID = "glasses_001"
+
+GPS_SERIAL_PORT = "/dev/ttyACM0"
+GPS_BAUD_RATE = 9600
+
+TRIG_PIN = 23
+ECHO_PIN = 24
+BUZZER_PIN = 18
+
+OBSTACLE_THRESHOLD_M = 0.75
+OBSTACLE_THRESHOLD_CM = OBSTACLE_THRESHOLD_M * 100
+
+I2C_BUS = 1
+MAX30102_ADDR = 0x57
+
+# Combined Sensor State Tracking Matrix
+sensor_state_lock = threading.Lock()
+latest_sensor_state = {
+    "gps": {
+        "latitude": None,
+        "longitude": None,
+        "speed_knots": None,
+        "timestamp_utc": None,
+        "status": "no_data",
+    },
+    "heart": {
+        "ok": False,
+        "bpm": None,
+        "spo2": None,
+        "finger": False,
+        "ir_dc": None,
+        "samples": 0,
+        "ts": None,
+        "status": "no_signal",
+    },
+    "obstacle": {
+        "distance_cm": None,
+        "threshold_cm": OBSTACLE_THRESHOLD_CM,
+        "alert": False,
+        "ts": None,
+        "status": "idle",
+    },
+    "system": {
+        "camera_running": False,
+        "camera_available": False,
+        "firebase_ok": False,
+        "heart_available": False,
+        "started_at": int(time.time()),
+    }
+}
+
+
+
 # ==========================================
 # LLM (Chat Mode) - Gemini
 # ==========================================
@@ -164,13 +226,21 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_MODEL = "gemini-3.1-flash-lite"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-
-LLM_TIMEOUT_SEC = 30
+# ==========================================
+# LLM (Chat Mode)
+# ==========================================
+LLM_URL = "http://localhost:8080/v1/chat/completions"
+LLM_MODEL = "qwen-chat"
+SCENE_MODEL ="smolvlm-vision"
+LLM_TIMEOUT_SEC = 90
 LLM_MAX_TOKENS = 140
-LLM_TEMPERATURE = 0.6
+LLM_TEMPERATURE = 0.3
+LLM_INENT_TEMPERATURE = 0.0
 LLM_TOP_P = 0.8
 LLM_TOP_K = 20
 LLM_MAX_CONTEXT_CHARS = 1800
+
+FRAMES_TO_CAPTURE = 5  # Number of frames to capture for better detection in chat modes
 
 LLM_CONTEXT_MAX = 14  # short rolling memory for speed
 _llm_context_lock = threading.Lock()
@@ -184,6 +254,7 @@ def append_llm_context(role, text):
     if not text:
         return
     with _llm_context_lock:
+        print(f"[LLM Context] Appending ({role}): {text}")
         _llm_context.append({"role": role, "content": text.strip()})
 
 def get_llm_context():

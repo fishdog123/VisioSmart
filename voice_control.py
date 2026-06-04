@@ -10,14 +10,43 @@ import vosk
 from config import (
     current_mode, mode_lock, tts_queue,
     VOICE_COMMANDS, SPECIAL_COMMANDS, MODE_NAMES, VOSK_MODEL_PATH,
-    active_mode_ref, last_spoken_text, CHAT_MODE,
-    append_llm_context, get_llm_context, llm_one_shot_queue,
+    active_mode_ref, last_spoken_text, LOCAL_LLM_CHAT_MODE, GEMINI_CHAT_MODE,
+    append_llm_context, get_llm_context, llm_one_shot_queue, audio_lock,
 )
 import llm_client
 
+pending_llm_text = [""]
+awaiting_llm_confirmation = [False]
 # ==========================================
 # VOICE CONTROL
 # ==========================================
+
+def _handle_llm_confirmation(text):
+    t = text.strip().lower()
+
+    yes_words = {"yes", "yeah", "yep", "correct", "confirm", "right", "sure", "ok", "okay"}
+    no_words = {"no", "nope", "cancel", "wrong", "stop"}
+
+    if t in yes_words:
+        user_text = pending_llm_text[0]
+        pending_llm_text[0] = ""
+        awaiting_llm_confirmation[0] = False
+
+        if user_text:
+            return _handle_chat_text(user_text)
+
+        tts_queue.put("Nothing to confirm.")
+        return True
+
+    if t in no_words:
+        pending_llm_text[0] = ""
+        awaiting_llm_confirmation[0] = False
+        tts_queue.put("Okay, say it again.")
+        return True
+
+    tts_queue.put("Please say yes or no.")
+    return True
+
 def _handle_special_command(word):
     """Handle non-mode voice commands: help, repeat, status/mode."""
     if word == "help":
@@ -42,34 +71,41 @@ def _handle_special_command(word):
             tts_queue.put("No mode is active.")
     print(f"[VOICE] Special command: '{word}'")
 
+
 def _handle_voice_text(text):
     text = text.strip().lower()
+
+    if awaiting_llm_confirmation[0]:
+        return _handle_llm_confirmation(text)
+
     words = text.split()
-    
     # Check for commands first
-    for word in words:
+    for word in set(words):
         if word in SPECIAL_COMMANDS:
             _handle_special_command(word)
             return True
+        # if (active_mode_ref[0] in (GEMINI_CHAT_MODE, LOCAL_LLM_CHAT_MODE)) and word in ("chat", "assistant", "five", "six", "5", "6"):
+        #     continue
         if word in VOICE_COMMANDS:
-            # Don't trigger a mode change if we are trying to talk to the chat assistant
-            if active_mode_ref[0] == CHAT_MODE and word in ("chat", "assistant", "five"):
-                continue
-                
+            # if (active_mode_ref[0] in (GEMINI_CHAT_MODE, LOCAL_LLM_CHAT_MODE)) and word in ("chat", "assistant", "five", "six", "5", "6"):
+            #     continue
             mode_num = VOICE_COMMANDS[word]
             with mode_lock:
-                current_mode[0] = mode_num
+                if current_mode[0] is None:
+                    current_mode[0] = mode_num
             if mode_num == 0:
                 tts_queue.put("Exiting. Goodbye.")
             print(f"[VOICE] Recognized '{word}' -> mode {mode_num}")
             return True
 
-    # If no structural commands matched, pass the whole text to the LLM (if in Chat Mode)
-    if active_mode_ref[0] == CHAT_MODE:
-        return _handle_chat_text(text)
+    # LLM only active in Chat mode
+    if active_mode_ref[0] in (GEMINI_CHAT_MODE, LOCAL_LLM_CHAT_MODE):
+        pending_llm_text[0] = text
+        awaiting_llm_confirmation[0] = True
+        tts_queue.put("Did you say: " + text + "?")
+        return True
 
     return False
-
 
 def _handle_chat_text(text):
     if not text:
@@ -85,9 +121,19 @@ def _handle_chat_text(text):
         tts_queue.put("LLM not available.")
         return True
 
+    if action.get("action") == "error":
+        tts_queue.put(action.get("text", "An error occurred."))
+        with mode_lock:
+            current_mode[0] = None
+        active_mode_ref[0] = None
+        print(f"[LLM] Error action: {action.get('text', '')}")
+        return True
+
     if action.get("action") == "respond":
+        response_text = action.get("text", "")
         append_llm_context("user", text)
-        tts_queue.put(action.get("text", ""))
+        append_llm_context("assistant", response_text)
+        tts_queue.put(response_text)
         return True
 
     if action.get("action") == "run_mode_once":
@@ -101,6 +147,7 @@ def _handle_chat_text(text):
 
         try:
             vision_result = response_queue.get(timeout=3)
+            print(f"[LLM] Received vision result for one-shot: {vision_result}")
         except queue.Empty:
             tts_queue.put("Sorry, I could not get a result from the camera.")
             return True
@@ -118,16 +165,26 @@ def _handle_chat_text(text):
             tts_queue.put("LLM finalized response failed.")
             return True
 
+        if final_action.get("action") == "error":
+            tts_queue.put(final_action.get("text", "An error occurred."))
+            with mode_lock:
+                current_mode[0] = None
+            active_mode_ref[0] = None
+            print(f"[LLM] Error action: {final_action.get('text', '')}")
+            return True
+
         if final_action.get("action") == "respond":
-            # Context updated only after a successful complete lifecycle
-            append_llm_context("user", text) 
-            tts_queue.put(final_action.get("text", ""))
+            final_speech = final_action.get("text", "")
+            append_llm_context("user", text)
+            append_llm_context("assistant", final_speech)
+            tts_queue.put(final_speech)
         else:
             tts_queue.put("I could not answer that.")
         return True
 
     tts_queue.put("I could not answer that.")
     return True
+
 def start_voice_listener():
     vosk.SetLogLevel(-1)
 
@@ -137,62 +194,64 @@ def start_voice_listener():
         return
 
     model = vosk.Model(VOSK_MODEL_PATH)
-    # 16000Hz is the native rate for most lightweight Vosk models
-    rec = vosk.KaldiRecognizer(model, 16000)
 
     def listener():
-        p = pyaudio.PyAudio()
-        try:
-            # Open standard microphone input stream
-            stream = p.open(
-                format=pyaudio.paInt16,
-                channels=1,
-                rate=16000,
-                input=True,
-                frames_per_buffer=4000 # ~0.25 seconds of audio per read
-            )
-            stream.start_stream()
-        except Exception as e:
-            print(f"[ERROR] Failed to open microphone stream: {e}")
-            tts_queue.put("Error: Microphone could not be started.")
-            p.terminate()
-            return
-
-        print("[INFO] Voice control active. Listening continuously and naturally...")
-
+        # Outer infinite loop keeps the background listener thread alive permanently
         while True:
-            try:
-                # Read raw audio data from the mic buffer
-                # exception_on_overflow=False prevents crashes on slow machines
-                data = stream.read(4000, exception_on_overflow=False)
-                
-                if len(data) == 0:
-                    continue
+            p = pyaudio.PyAudio()
+            stream = None
 
-                # Feed data chunks instantly to Vosk
-                if rec.AcceptWaveform(data):
-                    # Vosk detected a natural pause/end of a phrase!
-                    result_json = json.loads(rec.Result())
-                    text = result_json.get("text", "").strip()
-                    
-                    if text:
-                        print(f"[VOICE] Heard (Natural End): {text}")
-                        _handle_voice_text(text)
-                else:
-                    # Optional: You can get interim/partial text here if you want 
-                    # to show live captions, but DO NOT call FinalResult() here.
-                    pass
+            try:
+                rec = vosk.KaldiRecognizer(model, 16000)
+                # Open microphone stream targeting modern default virtual audio link
+                stream = p.open(
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=16000,
+                    input=True,
+                    frames_per_buffer=4000
+                )
+                stream.start_stream()
+                print("[INFO] STT Engine connected to default system microphone node.")
 
             except Exception as e:
-                print(f"[VOICE] Stream error: {e}")
-                break
+                # If mic is missing/disconnected at startup, drop here instead of crashing
+                print(f"[VOICE RECUPERATION] Microphone connection failed: {e}. Retrying connection in 3 seconds...")
+                p.terminate()
+                time.sleep(3.0)
+                continue
 
-        # Cleanup if the loop breaks
-        try:
-            stream.stop_stream()
-            stream.close()
-        except Exception:
-            pass
-        p.terminate()
+            # Inner stream loop reads audio frame vectors while connection is healthy
+            while True:
+                try:
+                    with audio_lock:
+                        data = stream.read(4000, exception_on_overflow=False)
+                    if len(data) == 0:
+                        continue
+
+                    if rec.AcceptWaveform(data):
+                        result_json = json.loads(rec.Result())
+                        text = result_json.get("text", "").strip()
+                        if text:
+                            print(f"[VOICE] Heard (Natural End): {text}")
+                            _handle_voice_text(text)
+
+                except Exception as e:
+                    # Catching the pipeline exception when the hardware unbinds from OS
+                    print(f"[VOICE DISCONNECT] Microphone device context dropped or timed out: {e}")
+                    break
+
+            # Reconnection pipeline: Clean up the corrupted instance components safely
+            print("[INFO] Attempting to reset mic stream channel mappings...")
+            try:
+                stream.stop_stream()
+                stream.close()
+            except Exception:
+                pass
+
+            p.terminate()
+
+            # Giving WirePlumber system maps a small breathing window to register the device drop/re-add
+            time.sleep(2.0)
 
     threading.Thread(target=listener, daemon=True).start()

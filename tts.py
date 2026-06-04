@@ -1,10 +1,9 @@
 import os
-import time
 import wave
-import json       
 import threading
-import pygame
+import subprocess
 from piper import PiperVoice
+from config import  MODEL_PATH, OUTPUT_WAV
 
 from config import (
     tts_queue,
@@ -14,17 +13,13 @@ from config import (
     audio_lock,
 )
 
-# --- SYSTEM CONFIGURATION ---
-MODEL_PATH = "en_US-joe-medium.onnx"
-CONFIG_PATH = "en_US-joe-medium.onnx.json"
-OUTPUT_WAV = "/tmp/tts_output.wav"
-
 # Load the voice model once globally during setup
 if os.path.exists(MODEL_PATH):
-    # piper1-gpl requires passing the model path; it automatically searches for the .json config
+    print(f"[TTS INFO] Loading Piper voice model from {MODEL_PATH}...")
     voice = PiperVoice.load(MODEL_PATH)
+    print("[TTS INFO] Piper model loaded successfully.")
 else:
-    print(f"[TTS WARNING] Piper model not found at {MODEL_PATH}")
+    print(f"[TTS CRITICAL ERROR] Piper model not found at {MODEL_PATH}")
     voice = None
 
 
@@ -34,7 +29,7 @@ def speak(text):
         return
 
     try:
-        # 1. Clean up any leftover audio artifact
+        # 1. Clean up any leftover audio artifact safely
         if os.path.exists(OUTPUT_WAV):
             try:
                 os.remove(OUTPUT_WAV)
@@ -45,35 +40,29 @@ def speak(text):
         with wave.open(OUTPUT_WAV, "wb") as wav_file:
             voice.synthesize_wav(text, wav_file)
 
-        # 3. Read the generated WAV file metadata to adapt to your earbud hardware
-        with wave.open(OUTPUT_WAV, "rb") as wav_file:
-            frames = wav_file.getnframes()
-            rate = wav_file.getframerate()
-            
-            # Prevent attempting to play empty files if synthesis is interrupted
-            if frames == 0:
-                print("[TTS Error] Piper synthesized an empty audio track.")
-                return
+        # 3. Quick verification check on the file asset
+        if not os.path.exists(OUTPUT_WAV) or os.path.getsize(OUTPUT_WAV) < 44:
+            print("[TTS Error] Piper generated an empty or corrupt audio track.")
+            return
 
-        # 4. Play the track to the earbuds using an isolated Pygame lifecycle
+        # 4. Play the track natively using the OS audio server
         with audio_lock:
-            # Initialize mixer dynamically using the actual file's sample rate.
-            # Force channels=2 (Stereo) so PipeWire maps the mono stream to both ears.
-            pygame.mixer.init(frequency=rate, size=-16, channels=2)
-            
-            pygame.mixer.music.load(OUTPUT_WAV)
-            pygame.mixer.music.play()
+            try:
+                # If Bluetooth reconnects, PipeWire instantly routes it correctly.
+                subprocess.run(["pw-play", OUTPUT_WAV], check=True)
 
-            # Block safely inside the lock while the audio plays out
-            while pygame.mixer.music.get_busy():
-                time.sleep(0.05)
+            except FileNotFoundError:
+                # Safe fallback to standard ALSA player if pw-play isn't found
+                subprocess.run(["aplay", "-q", OUTPUT_WAV], check=True)
 
-            # 5. Unload and un-initialize the mixer immediately to free the PipeWire channel
-            pygame.mixer.music.unload()
-            pygame.mixer.quit()
-        
+            except subprocess.CalledProcessError as e:
+                print(f"[TTS Playback Error] Command failed: {e}")
+
+            except Exception as playback_err:
+                print(f"[TTS Playback Error] Unexpected failure: {playback_err}")
+
     except Exception as e:
-        print(f"[TTS Error] {e}")
+        print(f"[TTS Unexpected Error] {e}")
 
 
 def tts_worker():
@@ -81,10 +70,10 @@ def tts_worker():
         text = tts_queue.get()
         if text is TTS_SHUTDOWN:
             break
-        
+
         last_spoken_text[0] = text
-        append_llm_context("assistant", text)
-        
+        # append_llm_context("assistant", text)
+
         speak(text)
         tts_queue.task_done()
 

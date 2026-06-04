@@ -88,7 +88,7 @@ class ColorRecognition:
 
     def summarize(self, frame):
         label, _, _ = self._detect_label_simple(frame)
-        return f"Dominant color: {label}"
+        return (1, f"Dominant color: {label}")
 
     def reset(self):
         self.last_label = None

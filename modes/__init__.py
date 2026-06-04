@@ -5,5 +5,6 @@ from modes.ocr_processor import OCRProcessor
 from modes.object_detector import ObjectDetector
 from modes.color_recognition import ColorRecognition
 from modes.light_recognition import LightRecognition
+from modes.local_scene import LocalSceneDescriber
 
-__all__ = ["CurrencyDetector", "FaceRecognizer", "GeminiSceneDescriber", "OCRProcessor", "ObjectDetector", "ColorRecognition", "LightRecognition"]
+__all__ = ["CurrencyDetector", "FaceRecognizer", "GeminiSceneDescriber", "OCRProcessor", "ObjectDetector", "ColorRecognition", "LightRecognition", "LocalSceneDescriber"]

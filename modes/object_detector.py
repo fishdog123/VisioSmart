@@ -49,7 +49,7 @@ class ObjectDetector:
         self.frame_rate_buffer = deque(maxlen=50)
         self.avg_frame_rate = 0
         self.last_spoken_time = 0
-        self.cooldown = 5
+        self.cooldown = 10
         self.last_detect_time = time.time()
         self.last_no_detect_time = 0
         print("[INFO] Object detector ready.")
@@ -184,24 +184,7 @@ class ObjectDetector:
             grouped[key] = grouped.get(key, 0) + 1
 
         if not grouped:
-            return "No objects detected."
+            return (0, "No objects detected.")
 
-        speech_parts = []
-        for (name, position), cnt in grouped.items():
-            if cnt == 1:
-                article = "an" if name[0] in "aeiou" else "a"
-                speech_parts.append(f"{article} {name} {position}")
-            else:
-                plural = self.irregular_plurals.get(name)
-                if plural is None:
-                    if name.endswith(("s", "sh", "ch", "x", "z")):
-                        plural = name + "es"
-                    else:
-                        plural = name + "s"
-                speech_parts.append(f"{cnt} {plural} {position}")
-
-        if len(speech_parts) == 1:
-            return f"I see {speech_parts[0]}"
-        if len(speech_parts) == 2:
-            return f"I see {speech_parts[0]} and {speech_parts[1]}"
-        return f"I see {', '.join(speech_parts[:-1])}, and {speech_parts[-1]}"
+        data_parts = [f"{cnt}x {name} ({position})" for (name, position), cnt in grouped.items()]
+        return (1, "Detected objects: " + ", ".join(data_parts))
