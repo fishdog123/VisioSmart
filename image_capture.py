@@ -8,8 +8,6 @@ import cv2
 
 
 
-PERSON_NAME = input("Enter the name of the person to capture photos for: ").strip()
-
 
 cam = Picamera2()
 config = cam.create_video_configuration(main={"format": "BGR888","size": RESOLUTION}, buffer_count=2)
@@ -49,4 +47,5 @@ def capture_photos(name):
     print(f"Photo capture completed. {photo_count} photos saved for {name}.")
 
 if __name__ == "__main__":
+    PERSON_NAME = input("Enter the name of the person to capture photos for: ").strip()
     capture_photos(PERSON_NAME)
