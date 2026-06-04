@@ -16,6 +16,7 @@ from config import (
     llm_one_shot_queue, LOCAL_LLM_CHAT_MODE,GEMINI_CHAT_MODE, sensor_state_lock, latest_sensor_state
     ,FRAMES_TO_CAPTURE
 )
+import tts # Ensure TTS is imported and initialized before any mode loading or voice control to avoid deadlocks
 from camera import get_frame, release_camera, reconfigure_camera
 from voice_control import start_voice_listener
 from modes import CurrencyDetector, FaceRecognizer, GeminiSceneDescriber, LocalSceneDescriber, OCRProcessor, ObjectDetector, ColorRecognition, LightRecognition
