@@ -56,10 +56,10 @@ class ColorRecognition:
         bgr = frame[cy, cx]
         display_bgr = (int(bgr[0]), int(bgr[1]), int(bgr[2]))
 
-        x1 = max(0, cx - 220)
-        x2 = min(w, cx + 200)
+        x1 = max(0, cx - 90)
+        x2 = min(w, cx + 90)
         y1 = 10
-        y2 = 120
+        y2 = 55
 
         return label, display_bgr, (x1, y1, x2, y2, cx, cy)
 
