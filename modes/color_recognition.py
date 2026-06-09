@@ -27,11 +27,11 @@ class ColorRecognition:
 
         hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
         pixel = hsv[cy, cx]
+
         hue = int(pixel[0])
         sat = int(pixel[1])
         val = int(pixel[2])
 
-        # Detect black (low value) and white (low saturation + high value)
         if val < 50:
             label = "BLACK"
         elif sat < 30 and val > 220:
@@ -56,10 +56,12 @@ class ColorRecognition:
         bgr = frame[cy, cx]
         display_bgr = (int(bgr[0]), int(bgr[1]), int(bgr[2]))
 
+        # Box below the mode indicator
         x1 = max(0, cx - 90)
         x2 = min(w, cx + 90)
-        y1 = 10
-        y2 = 55
+
+        y1 = 45
+        y2 = 90
 
         return label, display_bgr, (x1, y1, x2, y2, cx, cy)
 
@@ -68,20 +70,47 @@ class ColorRecognition:
         x1, y1, x2, y2, cx, cy = box
 
         now = time.time()
+
         if label != self.last_label:
             if now - self.last_spoken > (COLOR_TTS_COOLDOWN or 6.0):
                 try:
                     tts_queue.put(f"Color: {label}")
                 except Exception:
-                    # If TTS queue isn't available, don't crash the pipeline
                     pass
+
                 self.last_spoken = now
+
             self.last_label = label
 
         if not HEADLESS_MODE:
-            # Draw a filled white rectangle and the large label (matching color.py)
             cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), -1)
-            cv2.putText(frame, label, (cx - 200, 100), 0, 3, display_bgr, 5)
+
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 1)
+
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            scale = 1.0
+            thickness = 2
+
+            (text_w, text_h), _ = cv2.getTextSize(
+                label,
+                font,
+                scale,
+                thickness
+            )
+
+            text_x = x1 + (x2 - x1 - text_w) // 2
+            text_y = y1 + (y2 - y1 + text_h) // 2
+
+            cv2.putText(
+                frame,
+                label,
+                (text_x, text_y),
+                font,
+                scale,
+                display_bgr,
+                thickness
+            )
+
             cv2.circle(frame, (cx, cy), 5, (25, 25, 25), 3)
 
         return frame
