@@ -17,9 +17,7 @@ class OCRProcessor:
                 det_model_dir=str(OCR_BASE_DIR / "paddleocr-onnx/detection/v3/det.onnx"),
                 rec_model_dir=str(OCR_BASE_DIR / "paddleocr-onnx/languages/english/rec.onnx"),
                 rec_char_dict_path=str(OCR_BASE_DIR / "paddleocr-onnx/languages/english/dict.txt"),
-                use_gpu=False,
-                det_db_thresh=0.3,       # Default is 0.3. Pixels with scores higher than this are treated as text region
-                det_db_box_thresh=0.4,   # Default is 0.6. Bounding boxes with average scores lower than this are discarded
+                use_gpu=False
             )
         except ImportError:
             print("[WARNING] ONNXPaddleOcr not available, using EasyOCR fallback")
