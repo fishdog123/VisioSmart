@@ -25,38 +25,47 @@ import cv2
 # INITIALIZATION & FIREBASE REFERENCING
 # =========================================================
 def init_firebase():
-    if not firebase_admin._apps:
-        cred = credentials.Certificate(FIREBASE_KEY_PATH)
-        firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_DB_URL})
+    try:
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(FIREBASE_KEY_PATH)
+            firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_DB_URL})
 
-    db = firestore.client()
-    people_ref = (
-        db.collection("persons")
-        .document("gp6meBa7X3XS6vYAlmzId39eJVH2")
-        .collection("people")
-    )
+        db = firestore.client()
+        people_ref = (
+            db.collection("persons")
+            .document("gp6meBa7X3XS6vYAlmzId39eJVH2")
+            .collection("people")
+        )
 
-    known_people = {}
-    for doc in people_ref.stream():
-        data = doc.to_dict()
-        known_people[data.get("name", "Unknown")] =  data.get("photoUrls", [])
+        known_people = {}
+        for doc in people_ref.stream():
+            data = doc.to_dict()
+            known_people[data.get("name", "Unknown")] =  data.get("photoUrls", [])
 
-    for name, urls in known_people.items():
-        for url in urls:
-            response = requests.get(url)
-            if response.status_code == 200:
-                image_bytes = np.asarray(bytearray(response.content), dtype=np.uint8)
-                img_bgr = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
-                create_folder(BASE_DIR / "face_detection" / "dataset" / name)
-                filename = url.split("/")[-1].split("?")[0]
-                filepath = BASE_DIR / "face_detection" / "dataset" / name / filename
-                cv2.imwrite(str(filepath), img_bgr)
-                print(f"Downloaded {name}'s photo: {filepath}")
-    create_face_embedding_main()
+        for name, urls in known_people.items():
+            for url in urls:
+                try:
+                    response = requests.get(url, timeout=5)
+                except Exception as e:
+                    print(f"[FIREBASE] Error downloading {name}'s photo from {url}: {e}")
+                    continue
+                if response.status_code == 200:
+                    image_bytes = np.asarray(bytearray(response.content), dtype=np.uint8)
+                    img_bgr = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
+                    create_folder(BASE_DIR / "face_detection" / "dataset" / name)
+                    filename = url.split("/")[-1].split("?")[0]
+                    filepath = BASE_DIR / "face_detection" / "dataset" / name / filename
+                    cv2.imwrite(str(filepath), img_bgr)
+                    print(f"Downloaded {name}'s photo: {filepath}")
+        create_face_embedding_main()
 
 
-    with sensor_state_lock:
-        latest_sensor_state["system"]["firebase_ok"] = True
+        with sensor_state_lock:
+            latest_sensor_state["system"]["firebase_ok"] = True
+    except Exception as e:
+        print(f"[FIREBASE] Initialization error: {e}")
+        with sensor_state_lock:
+            latest_sensor_state["system"]["firebase_ok"] = False
 
 def ref_gps(): return db.reference("gps/latest")
 def ref_heart(): return db.reference(f"devices/{DEVICE_ID}/heartRate")
