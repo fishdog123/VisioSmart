@@ -147,11 +147,6 @@ TTS_SHUTDOWN = object()
 # No-detection heartbeat interval (seconds)
 NO_DETECT_INTERVAL = 15
 
-# Thermal monitoring (RPi)
-THERMAL_ZONE_PATH = "/sys/class/thermal/thermal_zone0/temp"
-THERMAL_WARNING_THRESHOLD = 80  # °C
-THERMAL_CHECK_INTERVAL = 30     # seconds
-
 # Face recognition UX tuning
 NO_PERSON_GRACE = 2.5       # seconds to wait before announcing "No person detected" after losing sight of a face
 PERSON_TTL = 3.5            # seconds to keep a person "active" after last seen (prevents rapid re-announcements when briefly occluded)

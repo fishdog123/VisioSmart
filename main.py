@@ -11,7 +11,6 @@ from flask import Flask, Response, jsonify
 from config import (
     current_mode, mode_lock, tts_queue, active_mode_ref,
     MODE_NAMES, RESOLUTION, OCR_RESOLUTION, TTS_SHUTDOWN,
-    THERMAL_ZONE_PATH, THERMAL_WARNING_THRESHOLD, THERMAL_CHECK_INTERVAL,
     STREAM_HOST, STREAM_PORT,
     llm_one_shot_queue, LOCAL_LLM_CHAT_MODE,GEMINI_CHAT_MODE, sensor_state_lock, latest_sensor_state
     ,FRAMES_TO_CAPTURE
@@ -156,27 +155,8 @@ def preload_all():
 
     threading.Thread(target=_load, daemon=True).start()
 
-# ==========================================
-# THERMAL MONITORING (RPi)
-# ==========================================
-def _thermal_monitor():
-    """Periodically check RPi CPU temperature and warn if throttling."""
-    if not os.path.exists(THERMAL_ZONE_PATH):
-        return  # Not on RPi or no thermal zone
-    while True:
-        try:
-            with open(THERMAL_ZONE_PATH) as f:
-                temp_c = int(f.read().strip()) / 1000
-            if temp_c >= THERMAL_WARNING_THRESHOLD:
-                tts_queue.put(f"Warning: device temperature is {int(temp_c)} degrees. Performance may be reduced.")
-                print(f"[THERMAL] CPU temp: {temp_c:.1f}°C (above threshold)")
-        except Exception:
-            pass
-        time.sleep(THERMAL_CHECK_INTERVAL)
 
-# ==========================================
-# MAIN LOOP
-# ==========================================
+
 def main():
 # SIGTERM handler for clean systemd service shutdown
     def _signal_handler(sig, frame):
@@ -186,22 +166,15 @@ def main():
 
     active_mode = None
 
-    # 1. Start the Unified Flask Server
-    threading.Thread(target=lambda: app.run(host=STREAM_HOST, port=STREAM_PORT, threaded=True, use_reloader=False), daemon=True).start()
-    print(f"[INFO] Unified server running at http://{STREAM_HOST}:{STREAM_PORT}")
-
-    # 2. Fire up Voice Control Assistant
-    start_voice_listener()
-    preload_all()
-    threading.Thread(target=_thermal_monitor, daemon=True).start()
-
-    # =========================================================
-    # 🔥 NEW: UNIFIED BACKGROUND HARDWARE TELEMETRY SUBSYSTEMS
-    # =========================================================
     print("[INFO] Initializing hardware peripheral components...")
     sensors.init_firebase()
 
-    # Start Bio-metric I2C interface safely
+    threading.Thread(target=lambda: app.run(host=STREAM_HOST, port=STREAM_PORT, threaded=True, use_reloader=False), daemon=True).start()
+    print(f"[INFO] Unified server running at http://{STREAM_HOST}:{STREAM_PORT}")
+
+    start_voice_listener()
+    preload_all()
+
     try:
         sensors.heart_service.start()
         with sensor_state_lock:
@@ -213,7 +186,6 @@ def main():
             latest_sensor_state["system"]["heart_available"] = False
         print(f"[ERROR] Heart Rate hardware missing or blocked: {e}")
 
-    # Kick off background asynchronous telemetry loops
     threading.Thread(target=sensors.gps_loop, daemon=True).start()
     threading.Thread(target=sensors.obstacle_loop, daemon=True).start()
     threading.Thread(target=sensors.system_uploader, daemon=True).start()
