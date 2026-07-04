@@ -146,7 +146,7 @@ def _post_gemini(system_content, context, user_text, examples=None, temperature=
             "responseMimeType": "application/json",
         },
     }
-    print(f"[GEMINI] Sending request with content: {contents}")
+    # print(f"[GEMINI] Sending request with content: {contents}")
 
     url = f"{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent"
     try:
