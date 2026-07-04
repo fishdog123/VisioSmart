@@ -90,7 +90,7 @@ def _post_local_llm(system_content, context, user_text, examples=None, temperatu
         "top_k": LLM_TOP_K,
         "response_format": {"type": "json_object"}
     }
-    print(f"[LOCAL LLM] Sending request: {messages}")
+    # print(f"[LOCAL LLM] Sending request: {messages}")
 
     try:
         response = requests.post(LLM_URL, json=payload, timeout=LLM_TIMEOUT_SEC)
