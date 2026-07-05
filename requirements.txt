@@ -1,0 +1,16 @@
+Flask==3.1.1
+PyAudio==0.2.14
+SpeechRecognition==3.14.5
+insightface==0.7.3
+keras==3.14.1
+numpy==2.4.6
+onnxocr==2025.5
+onnxruntime==1.20.1
+opencv-python==4.13.0.92
+picamera2==0.3.34
+pillow==11.1.0
+python-dotenv==1.0.1
+requests==2.32.3
+torch==2.10.0+cpu
+ultralytics==8.4.14
+vosk==0.3.45
