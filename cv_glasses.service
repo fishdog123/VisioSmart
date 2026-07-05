@@ -5,15 +5,15 @@ Wants=network-online.target
 
 [Service]
 User=pi
-WorkingDirectory=/home/pi/Pr/Gradv4_gemini_chat_scene
+WorkingDirectory=/home/pi/Pr/Gradv5_gemini_chat_scene
 Environment=PYTHONUNBUFFERED=1
 Environment=PATH=/home/pi/Pr/pr_gemini/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment="GEMINI_API_KEY=AIzaSyD8ypFbIo9Gb3tpYYLtoiVDua329loaQqw"
 Environment="XDG_RUNTIME_DIR=/run/user/1000"
-ExecStartPre=/bin/sleep 20
-ExecStart=/home/pi/Pr/pr_gemini/bin/python /home/pi/Pr/Gradv4_gemini_chat_scene/main.py
+ExecStartPre=/bin/sleep 10
+ExecStart=/home/pi/Pr/pr_gemini/bin/python /home/pi/Pr/Gradv5_gemini_chat_scene/main.py --headless 
 Restart=always
 RestartSec=5
+#StandardOutput=null
 StandardOutput=journal
 StandardError=journal
 

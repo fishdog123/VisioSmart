@@ -1,0 +1,14 @@
+[Unit]
+Description=Smart Glasses Multi-Model AI Router (Llama.cpp)
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/llama.cpp
+ExecStart=/home/pi/llama.cpp/build/bin/llama-server --models-preset /home/pi/llm/glasses_models.ini --port 8080 --models-max 1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
