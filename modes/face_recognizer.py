@@ -29,7 +29,7 @@ class FaceRecognizer:
 
         print("[INFO] Loading InsightFace model...")
         self.app = insightface.app.FaceAnalysis(name="buffalo_sc")
-        self.app.prepare(ctx_id=-1, det_size=(160, 160), det_thresh=0.5)
+        self.app.prepare(ctx_id=-1, det_size=(160, 160), det_thresh=0.4)
 
         self.person_db = {}
         if os.path.exists(FACE_DB_PATH):
