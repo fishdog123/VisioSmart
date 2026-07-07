@@ -35,7 +35,8 @@ app = Flask(__name__)
 
 
 def _frame_to_jpeg(frame):
-    success, buffer = cv2.imencode(".jpg", frame)
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    success, buffer = cv2.imencode(".jpg", rgb_frame)
     return buffer.tobytes() if success else None
 
 
