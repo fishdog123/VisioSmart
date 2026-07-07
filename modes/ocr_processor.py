@@ -87,12 +87,14 @@ class OCRProcessor:
             if new_texts:
                 combined = ". ".join(new_texts)
                 tts_queue.put(combined)
+                print(f"[OCR] Detected text: {combined}")
                 self.last_detect_time = now
 
             # No-detection heartbeat
             elif (now - self.last_detect_time) > NO_DETECT_INTERVAL \
                     and (now - self.last_no_detect_time) > NO_DETECT_INTERVAL:
                 tts_queue.put("No text detected. Still scanning.")
+                print("[OCR] No text detected. Still scanning.")
                 self.last_no_detect_time = now
 
         if not HEADLESS_MODE:
