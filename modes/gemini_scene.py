@@ -73,9 +73,9 @@ class GeminiSceneDescriber:
     def _describe_frame(self, frame):
         try:
             img = Image.fromarray(frame, mode="RGB")
-            config = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
+            config = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, thinking_config=types.ThinkingConfig(thinking_level="MINIMAL"))
             response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.1-flash-lite',
                 contents=[
                     "Provide a concise scene description of this image. "
                     "Describe the main subjects, setting, lighting, colors, and overall mood.",
