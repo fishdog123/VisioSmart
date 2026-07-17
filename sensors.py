@@ -1,4 +1,3 @@
-# sensors.py
 import time
 import threading
 import serial
@@ -12,7 +11,6 @@ from firebase_admin import credentials, db, firestore
 from image_capture import create_folder
 import requests
 from create_face_embedding import main as create_face_embedding_main
-
 from config import (
     FIREBASE_DB_URL, FIREBASE_KEY_PATH, DEVICE_ID,
     GPS_SERIAL_PORT, GPS_BAUD_RATE, TRIG_PIN, ECHO_PIN, BUZZER_PIN,
@@ -21,9 +19,8 @@ from config import (
 )
 import cv2
 
-# =========================================================
-# INITIALIZATION & FIREBASE REFERENCING
-# =========================================================
+
+# Initialize Firebase Admin SDK and download known people images
 def init_firebase():
     try:
         if not firebase_admin._apps:
@@ -72,9 +69,8 @@ def ref_heart(): return db.reference(f"devices/{DEVICE_ID}/heartRate")
 def ref_obstacle(): return db.reference(f"devices/{DEVICE_ID}/obstacle")
 def ref_system(): return db.reference(f"devices/{DEVICE_ID}/system")
 
-# =========================================================
-# GPS MODULE INTERFACE
-# =========================================================
+
+# GPS
 def parse_lat(lat_str, ns):
     if not lat_str: return None
     raw = float(lat_str)
@@ -119,9 +115,8 @@ def gps_loop():
                 latest_sensor_state["gps"]["status"] = "serial_error"
             time.sleep(2)
 
-# =========================================================
-# ULTRASONIC RANGEFINDER & ALERTS
-# =========================================================
+
+# Ultrasonic Obstacle Detection
 def init_gpio():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(TRIG_PIN, GPIO.OUT)
@@ -135,7 +130,7 @@ def read_distance_cm():
     time.sleep(0.00001)
     GPIO.output(TRIG_PIN, False)
 
-    # 1. Wait for Echo pin to go HIGH (Signal Start)
+    # Wait for Echo pin to go HIGH (Signal Start)
     # Giving it max 20ms to respond
     start_timeout = time.time() + 0.02
     pulse_start = time.time()
@@ -144,7 +139,7 @@ def read_distance_cm():
         if time.time() > start_timeout:
             return None
 
-    # 2. Wait for Echo pin to go LOW (Signal End)
+    # Wait for Echo pin to go LOW (Signal End)
     # Giving it max 0.03s (~30ms is roughly 5 meters max range tracking)
     end_timeout = time.time() + 0.03
     pulse_end = time.time()
@@ -182,9 +177,8 @@ def obstacle_loop():
                 latest_sensor_state["obstacle"]["status"] = "error"
             time.sleep(0.3)
 
-# =========================================================
-# BIO-METRIC CONTROLLER (MAX30102)
-# =========================================================
+
+# MAX30102 Heart Rate Sensor
 REG_INTR_ENABLE_1 = 0x02
 REG_FIFO_WR_PTR, REG_OVF_COUNTER, REG_FIFO_RD_PTR = 0x04, 0x05, 0x06
 REG_FIFO_DATA, REG_FIFO_CONFIG, REG_MODE_CONFIG, REG_SPO2_CONFIG = 0x07, 0x08, 0x09, 0x0A
@@ -193,7 +187,7 @@ REG_LED1_PA, REG_LED2_PA, REG_PILOT_PA, REG_PART_ID = 0x0C, 0x0D, 0x10, 0xFF
 class MAX30102:
     def __init__(self):
         self.address = MAX30102_ADDR
-        self.bus = None  # Do NOT call SMBus(I2C_BUS) here anymore
+        self.bus = None
 
     def write_reg(self, reg, val): self.bus.write_byte_data(self.address, reg, val & 0xFF)
     def read_reg(self, reg): return self.bus.read_byte_data(self.address, reg)
@@ -228,7 +222,7 @@ class MAX30102:
                  ((raw[i*6+3] & 0x03) << 16) | (raw[i*6+4] << 8) | raw[i*6+5]) for i in range(n)]
 
 def compute_bpm_from_ir(ir_values, fs=100):
-    if len(ir_values) < fs * 3:        # Reduced from 5s to 3s for faster response
+    if len(ir_values) < fs * 3:
         return None
 
     x = np.array(ir_values, dtype=np.float64)
@@ -254,11 +248,11 @@ def compute_bpm_from_ir(ir_values, fs=100):
 
     # Dynamic threshold
     amp = np.percentile(np.abs(recent), 85)
-    if amp < 8:                        # Increased minimum amplitude
+    if amp < 8:
         return None
 
     thresh = 0.38 * amp
-    min_dist = int(fs * 0.45)          # Slightly increased to reduce false peaks
+    min_dist = int(fs * 0.45)
 
     peaks = []
     last_peak = -10**9

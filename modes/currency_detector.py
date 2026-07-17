@@ -2,12 +2,9 @@ import cv2
 import numpy as np
 import time
 from collections import deque
-
 from config import CURRENCY_MODEL_PATH, MONEY, YOLO_CONF, HEADLESS_MODE, tts_queue, NO_DETECT_INTERVAL
 
-# ==========================================
-# MODE 1: CURRENCY DETECTOR
-# ==========================================
+
 class CurrencyDetector:
     def __init__(self):
         from ultralytics import YOLO
@@ -79,7 +76,6 @@ class CurrencyDetector:
         return frame
 
     def summarize(self, frame):
-        """Run a one-shot inference and return a concise text summary."""
         results = self.model(frame, verbose=False, conf=YOLO_CONF)
         detections = results[0].boxes
         total_money = 0

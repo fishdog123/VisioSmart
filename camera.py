@@ -1,16 +1,12 @@
 import threading
-
 from config import RESOLUTION, tts_queue
+from picamera2 import Picamera2
 
-# ==========================================
-# CAMERA
-# ==========================================
 cam = None
 _current_resolution = None
 _cam_lock = threading.Lock()
 
 try:
-    from picamera2 import Picamera2
     cam = Picamera2()
     config = cam.create_video_configuration(main={"format": "BGR888","size": RESOLUTION}, buffer_count=2)
     cam.configure(config)
@@ -32,7 +28,6 @@ def get_frame():
             return None
 
 def reconfigure_camera(resolution):
-    """Reconfigure camera resolution (e.g., higher res for OCR mode)."""
     global cam, _current_resolution
     if cam is None or resolution == _current_resolution:
         return
@@ -59,7 +54,4 @@ def reconfigure_camera(resolution):
 
 def release_camera():
     if cam is not None:
-        try:
-            cam.stop()
-        except Exception:
-            pass
+        cam.stop()

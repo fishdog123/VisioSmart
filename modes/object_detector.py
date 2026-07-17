@@ -3,21 +3,16 @@ import numpy as np
 import os
 import time
 from collections import deque
-
 from config import OBJECT_MODEL_PATH, BASE_DIR, YOLO_CONF, HEADLESS_MODE, tts_queue, NO_DETECT_INTERVAL
 
-# ==========================================
-# MODE 4: OBJECT DETECTION
-# ==========================================
+
 class ObjectDetector:
     def __init__(self):
         from ultralytics import YOLO
         print("[INFO] Loading YOLO model for object detection...")
 
-        # Check if model path exists
         if not os.path.exists(OBJECT_MODEL_PATH):
             print(f"[WARNING] Model path not found: {OBJECT_MODEL_PATH}")
-            # Try to find the model in subdirectories
             base_obj_dir = BASE_DIR / "object_detection"
             if not base_obj_dir.exists():
                 raise FileNotFoundError(f"Object detection directory not found: {base_obj_dir}")
@@ -34,10 +29,9 @@ class ObjectDetector:
         print(f"[INFO] Loading model from: {self.model_path}")
         self.model = YOLO(self.model_path, task="detect")
 
-        # Use YOLO model's built-in class names (authoritative mapping)
+        # Use YOLO model's built-in class names
         self.class_names = self.model.names
 
-        # Irregular plurals for natural speech
         self.irregular_plurals = {
             "person": "people", "sheep": "sheep", "mouse": "mice",
             "knife": "knives", "child": "children", "bus": "buses",
@@ -69,42 +63,33 @@ class ObjectDetector:
         t_start = time.perf_counter()
         frame_width = frame.shape[1]
 
-        # Run inference
         results = self.model(frame, verbose=False, conf=YOLO_CONF)
         detections = results[0].boxes
-        # Track per-object: (classname, position)
         object_details = []
 
         for i in range(len(detections)):
             conf = detections[i].conf.item()
 
-            # Get bounding box coordinates
             xyxy = detections[i].xyxy.cpu().numpy().squeeze().astype(int)
             if len(xyxy.shape) == 1:  # Single detection
                 xmin, ymin, xmax, ymax = xyxy
-            else:  # Multiple detections (should not happen with loop)
+            else:
                 continue
 
             classidx = int(detections[i].cls.item())
-
-            # Get class name from mapping
             classname = self.class_names.get(classidx, f"object_{classidx}")
             position = self._get_position(xmin, xmax, frame_width)
             object_details.append((classname, position))
 
-            # Draw bounding box
             color = self.bbox_colors[classidx % len(self.bbox_colors)]
             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
 
-            # Add label with confidence
             label = f"{classname}: {int(conf*100)}%"
             cv2.putText(frame, label, (xmin, ymin-10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
 
-        # Speak detected objects with position and cooldown
         now = time.time()
         if object_details and (now - self.last_spoken_time) > self.cooldown:
-            # Group by (classname, position) for concise speech
             grouped = {}
             for classname, position in object_details:
                 key = (classname, position)
@@ -149,7 +134,6 @@ class ObjectDetector:
         self.frame_rate_buffer.append(fps)
         self.avg_frame_rate = np.mean(self.frame_rate_buffer)
 
-        # Add info to frame
         if not HEADLESS_MODE:
             counts = {}
             for name, _ in object_details:
@@ -166,7 +150,6 @@ class ObjectDetector:
         return frame
 
     def summarize(self, frame):
-        """Run a one-shot inference and return a concise text summary."""
         frame_width = frame.shape[1]
         results = self.model(frame, verbose=False, conf=YOLO_CONF)
         detections = results[0].boxes

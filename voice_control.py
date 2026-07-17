@@ -17,9 +17,7 @@ import llm_client
 
 pending_llm_text = [""]
 awaiting_llm_confirmation = [False]
-# ==========================================
-# VOICE CONTROL
-# ==========================================
+
 
 def _handle_llm_confirmation(text):
     t = text.strip().lower()
@@ -84,11 +82,7 @@ def _handle_voice_text(text):
         if word in SPECIAL_COMMANDS:
             _handle_special_command(word)
             return True
-        # if (active_mode_ref[0] in (GEMINI_CHAT_MODE, LOCAL_LLM_CHAT_MODE)) and word in ("chat", "assistant", "five", "six", "5", "6"):
-        #     continue
         if word in VOICE_COMMANDS:
-            # if (active_mode_ref[0] in (GEMINI_CHAT_MODE, LOCAL_LLM_CHAT_MODE)) and word in ("chat", "assistant", "five", "six", "5", "6"):
-            #     continue
             mode_num = VOICE_COMMANDS[word]
             with mode_lock:
                 if current_mode[0] is None:
@@ -203,7 +197,6 @@ def start_voice_listener():
 
             try:
                 rec = vosk.KaldiRecognizer(model, 16000)
-                # Open microphone stream targeting modern default virtual audio link
                 stream = p.open(
                     format=pyaudio.paInt16,
                     channels=1,

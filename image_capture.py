@@ -1,13 +1,8 @@
 import os
 from datetime import datetime
-import time
-from pathlib import Path
 from config import RESOLUTION, BASE_DIR
 from picamera2 import Picamera2
 import cv2
-
-
-
 
 
 def create_folder(name):

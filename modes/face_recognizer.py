@@ -47,14 +47,12 @@ class FaceRecognizer:
                 mean_emb = np.mean(embs, axis=0)
                 self.person_db[nm] = mean_emb / np.linalg.norm(mean_emb)
 
-        # ---------------- UX state ----------------
 
         self.frame_count = 0
         self.last_faces = []
 
         self.last_face_seen_time = 0.0
 
-        # name -> last_seen_time
         self.active_people = {}
         self.person_positions = {}          # name -> "on the left" / "in the center" / "on the right"
         self.greeted_times = {}             # name -> last_greeted_time (arrival cooldown)
@@ -75,7 +73,7 @@ class FaceRecognizer:
         self.unknown_emotions = []   # list of (position, label, score)
         self.last_emotion_announce = {}  # name -> ts
 
-        # Load emotion recognizer (modular helper)
+        # Load emotion recognizer
         if EMOTION_ENABLED:
             from .emotion_recognizer import EmotionRecognizer
             try:
@@ -89,7 +87,7 @@ class FaceRecognizer:
         print("[INFO] Face recognition ready.")
 
     def reset(self):
-        """Clear all UX state on mode switch."""
+        """Clear all face state on mode switch."""
         self.frame_count = 0
         self.last_faces = []
         self.last_face_seen_time = 0.0
@@ -103,7 +101,6 @@ class FaceRecognizer:
         self.last_announced_state = (frozenset(), 0)
         self.last_announce_time = time.time()
         self.no_person_announced = False
-        # Clear emotion-related UX state
         try:
             self.person_emotions.clear()
         except Exception:
@@ -143,9 +140,7 @@ class FaceRecognizer:
         now = time.time()
         frame_width = frame.shape[1]
 
-        # -------------------------------
-        # Run detector every N frames
-        # -------------------------------
+        # Run every N frames to reduce CPU load
         if self.frame_count % FACE_DETECT_INTERVAL == 0:
 
             faces = self.app.get(frame)
@@ -164,7 +159,7 @@ class FaceRecognizer:
                 x1, y1, x2, y2 = face.bbox.astype(int)
                 position = self._get_position(x1, x2, frame_width)
 
-                # predict emotion for this face (if available)
+                # predict emotion for this face
                 emotion_label = None
                 emotion_score = 0.0
                 if self.emotion and getattr(self.emotion, 'enabled', True):
@@ -209,7 +204,7 @@ class FaceRecognizer:
                     if emotion_label:
                         frame_unknown_emotions.append((position, emotion_label, emotion_score))
 
-            # Update unknown face tracking (smoothed)
+            # Update unknown face tracking
             self._recent_unknown_counts.append(unknown_count)
             if len(self._recent_unknown_counts) > self.UNKNOWN_SMOOTH_FRAMES:
                 self._recent_unknown_counts.pop(0)
@@ -226,9 +221,7 @@ class FaceRecognizer:
                 self.unknown_positions = []
                 self.unknown_emotions = []
 
-            # -------------------------------
-            # Prune people who left
-            # -------------------------------
+            # Remove people who were not seen in this frame
             to_remove = []
             for name, t in self.active_people.items():
                 if now - t > PERSON_TTL:
@@ -246,18 +239,13 @@ class FaceRecognizer:
                 self.unknown_count = 0
                 self.unknown_positions = []
 
-        # -------------------------------
-        # 15s grouped announcement
-        # -------------------------------
         if now - self.last_announce_time >= ANNOUNCE_EVERY:
 
             current_set = frozenset(self.active_people.keys())
             current_state = (current_set, self.unknown_count)
 
             if current_state != self.last_announced_state:
-
                 parts = []
-                # Known people with positions
                 if current_set:
                     named_parts = []
                     for n in sorted(current_set):
@@ -274,15 +262,12 @@ class FaceRecognizer:
                             named_parts.append(f"{n.title()} {pos}" if pos else n.title())
                     parts.append(", ".join(named_parts))
 
-                # Unknown people with positions
                 if self.unknown_count > 0:
                     if self.unknown_positions:
-                        # Group unknowns by position and include common emotion if available
                         from collections import Counter
                         pos_counts = Counter(self.unknown_positions)
                         unknown_parts = []
                         for pos, cnt in sorted(pos_counts.items()):
-                            # find most common emotion for this position
                             labels = [e[1] for e in self.unknown_emotions if e[0] == pos]
                             common_label = None
                             if labels:
@@ -313,9 +298,7 @@ class FaceRecognizer:
 
             self.last_announce_time = now
 
-        # -------------------------------
-        # No person detected logic
-        # -------------------------------
+
         if len(self.active_people) == 0 and self.unknown_count == 0:
 
             if (
@@ -327,12 +310,9 @@ class FaceRecognizer:
                 self.no_person_announced = True
 
         else:
-            # reset when someone is present again
             self.no_person_announced = False
 
-        # -------------------------------
-        # Display
-        # -------------------------------
+
         if not HEADLESS_MODE:
             for x1, y1, x2, y2, name, emotion, emotion_score in self.last_faces:
                 color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
@@ -352,9 +332,9 @@ class FaceRecognizer:
             return (0, "No faces detected.")
 
         frame_width = frame.shape[1]
-        named = []  # list of (name, position, emotion_label_or_None)
+        named = []  # list of (name, position, emotion_label)
         unknown_positions = []
-        unknown_emotions = []  # list of (position, label)
+        unknown_emotions = []
 
         for face in faces:
             name = self.recognize(face.normed_embedding) \
@@ -362,7 +342,6 @@ class FaceRecognizer:
             x1, y1, x2, y2 = face.bbox.astype(int)
             position = self._get_position(x1, x2, frame_width)
 
-            # get emotion for this face if available
             emotion_label = None
             emotion_score = 0.0
             if self.emotion and getattr(self.emotion, 'enabled', True):

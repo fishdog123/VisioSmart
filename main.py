@@ -1,6 +1,5 @@
 import argparse
 import cv2
-import os
 import signal
 import time
 import threading
@@ -20,6 +19,7 @@ from camera import get_frame, release_camera, reconfigure_camera
 from voice_control import start_voice_listener
 from modes import CurrencyDetector, FaceRecognizer, GeminiSceneDescriber, LocalSceneDescriber, OCRProcessor, ObjectDetector, ColorRecognition, LightRecognition
 
+
 parser = argparse.ArgumentParser(description="Smart glasses CV service")
 parser.add_argument("--headless", action="store_true",
                     help="Run without display output and window rendering")
@@ -28,9 +28,7 @@ if args.headless:
     config.set_headless_mode(True)
 
 
-# ==========================================
-# CV STREAM SERVICE
-# ==========================================
+# Live video streaming and sensor data endpoints
 app = Flask(__name__)
 
 
@@ -115,7 +113,6 @@ def viewer():
 @app.route("/metrics")
 @app.route("/sensors")
 def sensor_metrics():
-    """Exposes all real-time structural sensor payloads directly on the primary CV stream port."""
     with sensor_state_lock:
         return jsonify(latest_sensor_state)
 
@@ -124,11 +121,9 @@ def health():
     return {"status": "ok"}
 
 
-# ==========================================
-# PRELOAD MODELS
-# ==========================================
+# Preload all models
 processors = {}
-failed_modes = {}  # mode_num -> error string
+failed_modes = {}
 
 def preload_all():
     def _load():
@@ -216,14 +211,11 @@ def main():
                     tts_queue.put(f"Switching to {MODE_NAMES[active_mode]}")
                     print(f"[MODE] Switched to: {MODE_NAMES[active_mode]}")
                 elif new_mode in processors:
-                            # Reset outgoing processor state (e.g. OCR recent_texts)
                     if active_mode in processors and hasattr(processors[active_mode], 'reset'):
                         processors[active_mode].reset()
-                    # Reset the incoming processor to allow one-shot modes to re-run cleanly
                     if new_mode in processors and hasattr(processors[new_mode], 'reset'):
                         processors[new_mode].reset()
 
-                    # Reconfigure camera for OCR (higher res) or back to default
                     target_res = OCR_RESOLUTION if new_mode == 3 else RESOLUTION
                     reconfigure_camera(target_res)
                     active_mode = new_mode
@@ -233,7 +225,6 @@ def main():
                 else:
                     tts_queue.put("Still loading, please wait.")
 
-            # Skip frame capture when idle in headless mode
             if active_mode is None and config.HEADLESS_MODE:
                 time.sleep(0.1)
                 continue
@@ -263,12 +254,9 @@ def main():
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 cv2.imshow("Smart Glasses", rgb)
 
-                # Check if window is still open
-                try:
-                    if cv2.getWindowProperty("Smart Glasses", cv2.WND_PROP_VISIBLE) < 1:
-                        break
-                except:
+                if cv2.getWindowProperty("Smart Glasses", cv2.WND_PROP_VISIBLE) < 1:
                     break
+
 
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
@@ -283,12 +271,9 @@ def main():
     finally:
         print("[INFO] Shutting down...")
         release_camera()
-        try:
-            import RPi.GPIO as GPIO
-            GPIO.cleanup()
-            print("[INFO] ✓ GPIO Pins cleaned up safely.")
-        except Exception:
-            pass
+        import RPi.GPIO as GPIO
+        GPIO.cleanup()
+        print("[INFO] ✓ GPIO Pins cleaned up safely.")
         if not config.HEADLESS_MODE:
             cv2.destroyAllWindows()
         tts_queue.put(TTS_SHUTDOWN)
@@ -312,7 +297,7 @@ def _handle_one_shot_requests():
         return
 
     frames = []
-    for _ in range(FRAMES_TO_CAPTURE):  # Capture a few frames to increase chance of a good one
+    for _ in range(FRAMES_TO_CAPTURE):  # Capture a few frames to make sure a point of interest is in view
         frame = get_frame()
         if frame is not None:
             frames.append(frame)

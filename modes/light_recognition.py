@@ -6,14 +6,6 @@ from config import COLOR_TTS_COOLDOWN, HEADLESS_MODE, tts_queue
 
 
 class LightRecognition:
-    """Simple ambient light detector using BGR->GRAY average brightness.
-
-    Public API:
-    - process(frame) -> annotated frame
-    - summarize(frame) -> short text summary
-    - reset()
-    """
-
     def __init__(self):
         self.last_label = None
         self.last_spoken = 0.0
@@ -24,6 +16,7 @@ class LightRecognition:
         if frame is None or frame.size == 0:
             return None
         h, w = frame.shape[:2]
+
         # sample a small center square to reduce noise
         size = max(8, int(min(h, w) * 0.05))
         cx, cy = w // 2, h // 2

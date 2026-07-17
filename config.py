@@ -4,16 +4,18 @@ import threading
 from collections import deque
 from pathlib import Path
 import time
-
 from dotenv import load_dotenv
 
-# ==========================================
-# CONFIGURATION
-# ==========================================
-BASE_DIR = Path(__file__).resolve().parent
 
+BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env", override=False)
 HEADLESS_MODE = False
+
+def set_headless_mode(headless: bool):
+    """ Set the global HEADLESS_MODE variable to control whether the application runs in headless mode (no GUI). """
+    global HEADLESS_MODE
+    HEADLESS_MODE = bool(headless)
+
 
 # Paths
 CURRENCY_MODEL_PATH = str(BASE_DIR / "currency_detection" / "last_15e_ncnn_model")
@@ -21,94 +23,12 @@ OBJECT_MODEL_PATH = str(BASE_DIR / "object_detection" / "yolo26n_ncnn_model")
 FACE_DB_PATH = str(BASE_DIR / "face_detection" / "encodings_insightface_retina_small.pickle")
 OCR_BASE_DIR = BASE_DIR / "ocr"
 VOSK_MODEL_PATH = str(BASE_DIR / "vosk-model-small-en-us-0.15")
+EMOTION_MODEL_PATH = str(BASE_DIR / "face_detection" / "emotion.h5")
+
 
 # Camera
 RESOLUTION = (400, 280)
 
-
-def set_headless_mode(headless: bool):
-    """Set headless mode explicitly at runtime. This is intended to be
-    called from `main.py` based on CLI args. When headless is True, display is
-    disabled. """
-    global HEADLESS_MODE
-    HEADLESS_MODE = bool(headless)
-
-# CV livestream
-STREAM_HOST = "0.0.0.0"
-STREAM_PORT = 8000
-
-# Detection
-YOLO_CONF = 0.5
-FACE_DETECT_INTERVAL = 3
-OCR_INTERVAL = 0.8
-OCR_MIN_CONFIDENCE = 0.80
-FACE_THRESHOLD = 0.35
-# Emotion detection config
-os.environ["KERAS_BACKEND"] = "torch"
-EMOTION_ENABLED = True
-EMOTION_MODEL_PATH = str(BASE_DIR / "face_detection" / "emotion.h5")
-EMOTION_INPUT_SIZE = (48, 48)
-EMOTION_CONFIDENCE_THRESHOLD = 0.20
-EMOTION_COOLDOWN = 10.0
-EMOTION_DETECT_INTERVAL = FACE_DETECT_INTERVAL  # run emotion inference at same interval by default
-
-# TTS
-class _BoundedTTSQueue(queue.Queue):
-    """Queue that drops the oldest message when full instead of blocking."""
-    def put(self, item, block=True, timeout=None):
-        for _ in range(self.maxsize + 1):
-            try:
-                super().put(item, block=False)
-                return
-            except queue.Full:
-                try:
-                    self.get_nowait()
-                    self.task_done()  # balance unfinished_tasks for the dropped item
-                except queue.Empty:
-                    pass
-
-tts_queue = _BoundedTTSQueue(maxsize=20)
-TTS_VOICE = "en"
-TTS_SPEED = 150
-TTS_AMPLITUDE = 160  # espeak-ng amplitude (0-200). Increase for louder output.
-MODEL_PATH = "en_US-joe-medium.onnx"
-OUTPUT_WAV = "/tmp/tts_output.wav"
-
-
-# =========================
-# MONEY MAPPING
-# =========================
-MONEY = {
-    10: "5 Pounds", 1: "5 Pounds",
-    0: "10 Pounds", 3: "10 Pounds",
-    9: "20 Pounds", 5: "20 Pounds",
-    8: "50 Pounds", 2: "50 Pounds",
-    4: "100 Pounds", 11: "100 Pounds",
-    6: "200 Pounds", 7: "200 Pounds"
-}
-
-# ==========================================
-# VOICE CONTROL SHARED STATE
-# ==========================================
-current_mode = [None]
-mode_lock = threading.Lock()
-
-# Lock used to serialize audio device access between TTS and microphone
-audio_lock = threading.RLock()
-
-VOICE_COMMANDS = {
-    "0": 0, "stop": 0, "exit": 0, "quit": 0,
-    "one": 1, "1": 1, "won": 1, "currency": 1,
-    "two": 2, "2": 2, "too": 2, "to": 2, "face": 2,
-    "three": 3, "3": 3, "free": 3, "tree": 3, "ocr": 3, "text": 3,
-    "four": 4, "4": 4, "for": 4, "object": 4,
-    "five": 5, "5": 5,
-    "six": 6, "6": 6,
-    "seven": 7, "7": 7,
-    "eight": 8, "8": 8,
-    "nine": 9, "9": 9, "color": 9, "colour": 9, "colors": 9,
-    "ten": 10, "10": 10, "light": 10, "lights": 10,
-}
 GEMINI_CHAT_MODE = 5
 LOCAL_LLM_CHAT_MODE = 6
 
@@ -125,57 +45,121 @@ MODE_NAMES = {
     10: "Light Recognition",
 }
 
-# Special (non-mode) voice commands
-SPECIAL_COMMANDS = {"help", "repeat", "status", "mode"}
 
-# Shared state for special voice commands
-active_mode_ref = [None]   # Updated by main loop so voice can report it
-last_spoken_text = [""]    # Updated by TTS worker for "repeat" command
+# Live stream server config
+STREAM_HOST = "0.0.0.0"
+STREAM_PORT = 8000
 
-# OCR-specific higher resolution (camera reconfigures on OCR mode switch)
+# Object detection config
+YOLO_CONF = 0.5
+
+
+# OCR config
+OCR_INTERVAL = 0.8
+OCR_MIN_CONFIDENCE = 0.80
 OCR_RESOLUTION = (640, 480)
 
-# Color recognition configuration
+
+# Currency detection config
+MONEY = {
+    10: "5 Pounds", 1: "5 Pounds",
+    0: "10 Pounds", 3: "10 Pounds",
+    9: "20 Pounds", 5: "20 Pounds",
+    8: "50 Pounds", 2: "50 Pounds",
+    4: "100 Pounds", 11: "100 Pounds",
+    6: "200 Pounds", 7: "200 Pounds"
+}
+
+
+# Face recognition config
+NO_PERSON_GRACE = 2.5       # seconds to wait before announcing "No person detected" after losing sight of a face
+PERSON_TTL = 3.5            # seconds to keep a person "active" after last seen (prevents rapid re-announcements when briefly occluded)
+ANNOUNCE_EVERY = 15.0       # seconds between announcements of currently seen people (prevents spamming when many people are present or frequently changing)
+GREET_COOLDOWN = 30.0       # seconds before re-greeting the same person after they leave and return
+FACE_THRESHOLD = 0.35
+FACE_DETECT_INTERVAL = 3
+
+
+# Emotion detection config
+os.environ["KERAS_BACKEND"] = "torch"
+EMOTION_ENABLED = True
+EMOTION_INPUT_SIZE = (48, 48)
+EMOTION_CONFIDENCE_THRESHOLD = 0.20
+EMOTION_COOLDOWN = 10.0
+EMOTION_DETECT_INTERVAL = FACE_DETECT_INTERVAL
+
+
+# Color recognition config
 COLOR_SAMPLE_SIZE = 40  # pixels. If None, use COLOR_SAMPLE_PERCENT of the frame short side.
 COLOR_SAMPLE_PERCENT = 0.05
 COLOR_TTS_COOLDOWN = 6.0  # seconds between TTS announcements for color changes
 COLOR_SMOOTHING_FRAMES = 5  # temporal smoothing window (frames)
 
-# TTS shutdown sentinel (safer than None — prevents accidental worker death)
-TTS_SHUTDOWN = object()
 
-# No-detection heartbeat interval (seconds)
-NO_DETECT_INTERVAL = 15
+# TTS config
+class _BoundedTTSQueue(queue.Queue):
+    """Queue that drops the oldest message when full instead of blocking."""
+    def put(self, item, block=True, timeout=None):
+        for _ in range(self.maxsize + 1):
+            try:
+                super().put(item, block=False)
+                return
+            except queue.Full:
+                try:
+                    self.get_nowait()
+                    self.task_done()  # balance unfinished_tasks for the dropped item
+                except queue.Empty:
+                    pass
 
-# Face recognition UX tuning
-NO_PERSON_GRACE = 2.5       # seconds to wait before announcing "No person detected" after losing sight of a face
-PERSON_TTL = 3.5            # seconds to keep a person "active" after last seen (prevents rapid re-announcements when briefly occluded)
-ANNOUNCE_EVERY = 15.0       # seconds between announcements of currently seen people (prevents spamming when many people are present or frequently changing)
-GREET_COOLDOWN = 30.0       # seconds before re-greeting the same person after they leave and return
 
-# Add these to the bottom of your existing config.py
+tts_queue = _BoundedTTSQueue(maxsize=20)
+TTS_VOICE = "en"
+TTS_SPEED = 150
+TTS_AMPLITUDE = 160  # espeak-ng amplitude (0-200). Increase for louder output.
+MODEL_PATH = "en_US-joe-medium.onnx"
+OUTPUT_WAV = "/tmp/tts_output.wav"
 
-# =========================================================
-# SENSOR & TELEMETRY CONFIG
-# =========================================================
+
+# voice command config
+current_mode = [None]
+mode_lock = threading.Lock()
+audio_lock = threading.RLock()
+VOICE_COMMANDS = {
+    "0": 0, "stop": 0, "exit": 0, "quit": 0,
+    "one": 1, "1": 1, "won": 1, "currency": 1,
+    "two": 2, "2": 2, "too": 2, "to": 2, "face": 2,
+    "three": 3, "3": 3, "free": 3, "tree": 3, "ocr": 3, "text": 3,
+    "four": 4, "4": 4, "for": 4, "object": 4,
+    "five": 5, "5": 5,
+    "six": 6, "6": 6,
+    "seven": 7, "7": 7,
+    "eight": 8, "8": 8,
+    "nine": 9, "9": 9, "color": 9, "colour": 9, "colors": 9,
+    "ten": 10, "10": 10, "light": 10, "lights": 10,
+}
+SPECIAL_COMMANDS = {"help", "repeat", "status", "mode"} # Special (non-mode) voice commands
+active_mode_ref = [None]  # Updated by main loop so voice can report it
+last_spoken_text = [""]   # Updated by TTS worker for "repeat" command
+TTS_SHUTDOWN = object()   # TTS shutdown sentinel (safer than None — prevents accidental worker death)
+
+
+# Sensor and hardware configuration
 FIREBASE_DB_URL = "https://visiosmart2-default-rtdb.firebaseio.com/"
 FIREBASE_KEY_PATH = "/home/pi/firebase/serviceAccountKey.json"
 DEVICE_ID = "glasses_001"
-
 GPS_SERIAL_PORT = "/dev/ttyACM0"
 GPS_BAUD_RATE = 9600
-
 TRIG_PIN = 23
 ECHO_PIN = 24
 BUZZER_PIN = 18
-
 OBSTACLE_THRESHOLD_M = 0.75
 OBSTACLE_THRESHOLD_CM = OBSTACLE_THRESHOLD_M * 100
-
 I2C_BUS = 1
 MAX30102_ADDR = 0x57
+NO_DETECT_INTERVAL = 15 # No-detection heartbeat interval
 
-# Combined Sensor State Tracking Matrix
+
+# Sensor State Tracking Matrix
 sensor_state_lock = threading.Lock()
 latest_sensor_state = {
     "gps": {
@@ -212,18 +196,14 @@ latest_sensor_state = {
 }
 
 
-
-# ==========================================
-# LLM (Chat Mode) - Gemini
-# ==========================================
+# Cloud LLM configuration
 LLM_PROVIDER = "gemini"
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_MODEL = "gemini-3.1-flash-lite"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-# ==========================================
-# LLM (Chat Mode)
-# ==========================================
+
+# Local LLM configuration
 LLM_URL = "http://localhost:8080/v1/chat/completions"
 LLM_MODEL = "qwen-chat"
 SCENE_MODEL ="smolvlm-vision"
@@ -234,15 +214,11 @@ LLM_INENT_TEMPERATURE = 0.0
 LLM_TOP_P = 0.8
 LLM_TOP_K = 20
 LLM_MAX_CONTEXT_CHARS = 1800
-
 FRAMES_TO_CAPTURE = 5  # Number of frames to capture for better detection in chat modes
-
 LLM_CONTEXT_MAX = 6  # short rolling memory for speed
 _llm_context_lock = threading.Lock()
 _llm_context = deque(maxlen=LLM_CONTEXT_MAX)
-
-# One-shot vision request queue: items are dicts with mode and response_queue
-llm_one_shot_queue = queue.Queue(maxsize=2)
+llm_one_shot_queue = queue.Queue(maxsize=2) # One-shot vision request queue
 
 def append_llm_context(role, text):
     """Add a short entry to LLM context (role: user/assistant)."""

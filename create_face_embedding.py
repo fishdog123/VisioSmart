@@ -10,9 +10,9 @@ from config import BASE_DIR
 
 DATASET_PATH = BASE_DIR / "face_detection" / "dataset"
 OUTPUT_PATH = BASE_DIR / "face_detection" / "encodings_insightface_retina_small.pickle"
-MODEL_NAME = "buffalo_sc"                           # (RetinaFace + ArcFace)
-DET_SIZE = (320, 320)                               # Smaller = faster
-MIN_FACE_CONF = 0.70                                # Skip low-confidence detections
+MODEL_NAME = "buffalo_sc"
+DET_SIZE = (320, 320)
+MIN_FACE_CONF = 0.70
 
 
 
@@ -43,7 +43,7 @@ def embed_images(image_paths):
             print(f"[WARN] Skipping unreadable file: {image_path}")
             continue
 
-        # Detect faces using RetinaFace
+        # Detect faces
         faces = model.get(image)
         if not faces:
             print(f"[WARN] No faces detected in {image_path}")
@@ -57,7 +57,7 @@ def embed_images(image_paths):
             print(f"[WARN] Low confidence ({largest_face.det_score:.2f}) for {image_path}, skipping.")
             continue
 
-        embedding = largest_face.normed_embedding   # normalize it here instead of at the cosine similarity part to save time at inference
+        embedding = largest_face.normed_embedding   # normalize it here instead of later
         known_encodings.append(embedding)
         known_names.append(name)
 

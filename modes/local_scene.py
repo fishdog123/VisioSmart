@@ -29,7 +29,6 @@ SCENE_VLM_PROMPT = (
 
 class LocalSceneDescriber:
     def __init__(self):
-        """Initializes the VLM Scene Description module."""
         print("[SCENE] SmolVLM Scene Describer initialized.")
         self.last_spoken_time = 0
         self.cooldown = 10
@@ -39,7 +38,6 @@ class LocalSceneDescriber:
         self._lock = threading.Lock()
 
     def reset(self):
-        """Resets the state of the describer for clean mode-switching."""
         self.completed = False
         self.last_spoken_time = 0
         self.last_no_detect_time = 0
@@ -47,17 +45,12 @@ class LocalSceneDescriber:
             self._pending = False
 
     def process(self, frame):
-        """
-        Evaluates the scene non-blockingly. If cooldown has passed and no inference
-        is active, it dispatches a background worker thread so the camera stream doesn't freeze.
-        """
         if not self.completed:
             now = time.time()
             if now - self.last_spoken_time >= self.cooldown:
                 with self._lock:
                     if not self._pending:
                         self._pending = True
-                        # Shallow copy to prevent mutations while thread runs
                         worker_frame = frame.copy()
                         threading.Thread(
                             target=self._describe_frame_async,
@@ -71,7 +64,6 @@ class LocalSceneDescriber:
         return frame
 
     def _describe_frame_async(self, frame):
-        """Background thread worker target."""
         description = self._describe_frame(frame)
         with self._lock:
             self._pending = False
@@ -84,11 +76,9 @@ class LocalSceneDescriber:
             self.completed = True
 
     def summarize(self, frame):
-        """Synchronous helper function matching Gemini describer design."""
         return (1, self._describe_frame(frame))
 
     def _describe_frame(self, frame):
-        """Handles file serialization, base64 compilation, and local VLM routing."""
         image_path = "/tmp/vlm_scene_capture.jpg"
 
         try:
@@ -138,7 +128,6 @@ class LocalSceneDescriber:
             content = data["choices"][0]["message"]["content"].strip()
             print(f"[VLM] Raw Description: {content}")
 
-            # Unpack accidental structural JSON returns if your small VLM outputs quirks
             if content.startswith("{"):
                 start = content.find('"text":')
                 if start != -1:
@@ -154,7 +143,6 @@ class LocalSceneDescriber:
             return "Local scene description server connection error."
 
     def _get_image_base64_url(self, image_path):
-        """Converts a local image file into a base64 data URL for the VLM payload."""
         with open(image_path, "rb") as image_file:
             base64_data = base64.b64encode(image_file.read()).decode("utf-8")
         return f"data:image/jpeg;base64,{base64_data}"

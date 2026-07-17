@@ -2,12 +2,9 @@ import cv2
 import numpy as np
 import time
 from collections import deque
-
 from config import OCR_BASE_DIR, OCR_INTERVAL, OCR_MIN_CONFIDENCE, HEADLESS_MODE, tts_queue, NO_DETECT_INTERVAL
 
-# ==========================================
-# MODE 3: OCR
-# ==========================================
+
 class OCRProcessor:
     def __init__(self):
         try:
@@ -34,14 +31,12 @@ class OCRProcessor:
         self.last_no_detect_time = 0
 
     def reset(self):
-        """Clear state when leaving OCR mode so text is re-announced on return."""
         self.recent_texts.clear()
         self.last_boxes = []
         self.last_detect_time = time.time()
         self.last_no_detect_time = 0
 
     def _sort_by_position(self, items):
-        """Sort OCR results top-to-bottom, then left-to-right for natural reading order."""
         return sorted(items, key=lambda item: (item[0][0][1], item[0][0][0]))
 
     def process(self, frame):
@@ -70,10 +65,7 @@ class OCRProcessor:
                         pts = [(int(p[0]), int(p[1])) for p in box]
                         raw_results.append((pts, text))
 
-            # Sort by reading order (top-to-bottom, left-to-right)
             raw_results = self._sort_by_position(raw_results)
-
-            # Collect new texts to speak as one combined message
             new_texts = []
             for pts, text in raw_results:
                 if not HEADLESS_MODE:
@@ -83,7 +75,6 @@ class OCRProcessor:
                     self.recent_texts.append(key)
                     new_texts.append(text)
 
-            # Speak all new text fragments as one combined sentence
             if new_texts:
                 combined = ". ".join(new_texts)
                 tts_queue.put(combined)
@@ -105,7 +96,6 @@ class OCRProcessor:
         return frame
 
     def summarize(self, frame):
-        """Run a one-shot OCR pass and return a concise text summary."""
         raw_results = []
 
         if self.use_easyocr:

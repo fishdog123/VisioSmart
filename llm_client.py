@@ -1,6 +1,5 @@
 import json
 import requests
-
 from config import (
     GEMINI_API_URL,
     GEMINI_MODEL,
@@ -18,10 +17,7 @@ from config import (
     MODE_NAMES,
 )
 
-# ==========================================
-# LLM Client (Gemini & Local VLM/LLM)
-# ==========================================
-# 1. System instruction only (No examples inside!)
+
 SYSTEM_PROMPT = (
     "You are a fast smart glasses assistant for blind users.\n"
     "Rule: You must ONLY output a valid JSON object based on the user request.\n\n"
@@ -31,7 +27,6 @@ SYSTEM_PROMPT = (
     "Mode Map: 1=Currency, 2=Face, 3=OCR, 4=Object\n\n"
 )
 
-# 2. Structured Few-Shot Examples
 ROUTER_EXAMPLES = [
     {"role": "user", "content": "who is here"},
     {"role": "assistant", "content": '{"action":"run_mode_once","mode":2,"reason":"Identify people"}'},

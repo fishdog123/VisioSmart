@@ -1,18 +1,9 @@
 import cv2
 import time
-
 from config import COLOR_TTS_COOLDOWN, HEADLESS_MODE, tts_queue
 
 
 class ColorRecognition:
-    """Minimal color recognition: center-pixel HSV mapping.
-
-    Keeps the same public API used by other modes:
-    - `process(frame)` returns an annotated frame
-    - `summarize(frame)` returns a short text summary
-    - `reset()` clears internal state
-    """
-
     def __init__(self):
         self.last_label = None
         self.last_spoken = 0.0
@@ -56,7 +47,6 @@ class ColorRecognition:
         bgr = frame[cy, cx]
         display_bgr = (int(bgr[0]), int(bgr[1]), int(bgr[2]))
 
-        # Box below the mode indicator
         x1 = max(0, cx - 90)
         x2 = min(w, cx + 90)
 

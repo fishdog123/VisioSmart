@@ -5,13 +5,6 @@ from keras.preprocessing.image import img_to_array
 
 
 class EmotionRecognizer:
-    """Helper to load a Keras emotion model and run per-face predictions.
-
-    Usage:
-        er = EmotionRecognizer(model_path)
-        label, score = er.predict(frame, (x1, y1, x2, y2))
-    """
-
     DEFAULT_LABELS = ['Angry', 'Disgust', 'Fear', 'Happy', 'Neutral', 'Sad', 'Surprise']
 
     def __init__(self, model_path: str = None, input_size=(48, 48), labels=None, enabled=True):
@@ -39,10 +32,6 @@ class EmotionRecognizer:
             self.enabled = False
 
     def predict(self, frame, bbox):
-        """Predict emotion for the given BGR `frame` and integer bbox (x1,y1,x2,y2).
-
-        Returns (label, score) where score is the softmax probability for the chosen label.
-        """
         if not self.enabled or self.model is None:
             return ("Unknown", 0.0)
 
