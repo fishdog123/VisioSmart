@@ -1,7 +1,7 @@
-# Smart Glasses For Blind People
+# VisioSmart - Smart Glasses For Blind People
 
-Voice-driven computer-vision assistant for Raspberry Pi 5 (Trixie).
-Use offline speech-to-text to select detection modes; the system speaks results via TTS.
+Voice-driven computer-vision assistant for Raspberry Pi 5.
+Use speech-to-text to select detection modes; the system speaks results via TTS.
 
 Important: this README does not document the heart-sensor feature. Live video streaming is available (see "Live stream" below).
 
@@ -12,6 +12,7 @@ Important: this README does not document the heart-sensor feature. Live video st
 This project runs on a Raspberry Pi and provides several real-time computer-vision "modes" that are selected by voice. The Pi captures frames with the Pi Camera, processes them with mode-specific detectors, and announces concise results using `pw-play`. A small Flask server provides an MJPEG live stream,snapshot endpoints and sensors data.
 
 Key points:
+- Entry Point: Main loop in `main.py`
 - Voice input: offline Vosk (handled by `voice_control.py`).
 - Mode selection: spoken commands map to mode numbers in `config.py`.
 - Audio output: `tts.py` queues messages and plays them via `pw-play` (PipeWire).
@@ -19,15 +20,15 @@ Key points:
 
 ---
 
-## Hardware (tested / expected)
-- Raspberry Pi 5 (Trixie OS)
+## Hardware
+- Raspberry Pi 5
 - Pi Camera Module v3 (CSI)
 - Wireless earbuds (act as both microphone and speaker; pair once in OS so they auto-connect on boot)
 - 3D-printed headset mount to hold the Pi + power bank
 
 ---
 
-## Quick start (minimal)
+## Quick start
 
 On the Raspberry Pi:
 
@@ -36,13 +37,13 @@ sudo apt update
 sudo apt install -y python3-venv python3-pip pipewire portaudio19-dev libsndfile1
 
 # create a virtualenv
-python3 -m venv venv
+python3 -m venv --system-site-packages  venv
 . venv/bin/activate
 
-# Install dependencies after generating a pinned requirements.txt on the Pi (see Requirements below)
+# Install dependencies
 pip install -r requirements.txt
 
-# Test the app (headless)
+# Run the app
 python main.py --headless
 ```
 
@@ -132,16 +133,6 @@ See `config.py` for all runtime configuration and voice mappings. You can set `G
 
 ---
 
-## Requirements
-
-```bash
-python -m venv --system-site-packages venv
-. venv/bin/activate
-pip install -r requirements.txt
-```
-
----
-
-
 ## Notes
-- The face-embeddings pickle and some model files are expected to be produced or downloaded on the Raspberry Pi; the repo does not include large model binaries.
+- The face-embeddings pickle and some model files are expected to be produced or downloaded on the Raspberry Pi. The repo does not include large model binaries.
+- Ensure the local models (Qwen and SmolVLM) are running before starting the application. The provided `ai_glasses.service` can be used to start them automatically at boot.
